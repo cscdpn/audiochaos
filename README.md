@@ -4,26 +4,66 @@ A modular synthesizer written in Rust, built for chaotic, aggressive sounds:
 small signal-processing bricks that you route together however you like,
 driven from a terminal UI.
 
-## Status
+## Using it
 
-Early work. The signal graph, audio output and a first set of modules
-(oscillator, VCA, master) exist. `just run` plays a sine and reads new
-frequencies from stdin; the TUI is still to come.
+`just run` starts the sound and the TUI. The rack starts on a simple
+sequenced bassline; everything else is up to you.
+
+- **Knobs screen**: `↑↓` select a knob, `←→` turn it, `Shift+←→` (or `H`/`L`)
+  turn it faster.
+- **Patch screen** (`Tab`): `←→` switch between the outputs and inputs
+  columns, `↑↓` select, `Enter` connects the selected output to the selected
+  input, or disconnects it if already connected. In the inputs column, `●`
+  marks a cable from the selected output and `○` a cable from elsewhere.
+- `q` or `Esc` quits.
+
+Every knob has a matching `cv` input: patch any signal into it to modulate
+the knob. A ±1 signal sweeps the knob's whole range.
+
+### Modules
+
+| Module | Does |
+|---|---|
+| seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
+| lfo | slow sine, triangle, saw and square |
+| noise | white noise |
+| s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
+| osc 1, osc 2 | sine, saw, square, with through-zero linear FM |
+| filter | resonant state-variable filter: lowpass, bandpass, highpass |
+| dist | drive into a blend of `tanh` clipping and sine wavefolding |
+| crush | bitcrusher: bit depth and sample-rate reduction |
+| delay | up to 2 s, feedback above 1 self-oscillates instead of exploding |
+| vca | `out = in * (gain + mod)`, ring modulator when `mod` is audio |
+| master | volume and soft limiter, the only thing the speakers hear |
+
+Some starting points for noise: patch an oscillator into its own `fm`, feed
+the delay back into an oscillator's `fm`, push filter resonance to the max,
+patch noise through `s&h` into a `freq cv`.
 
 ## Design notes
 
 - Audio and control signals share the same `f32` buffers, like voltages in a
   hardware modular.
-- Modules are processed in insertion order. A cable from a module processed
-  later (or from itself) reads its previous block, so feedback is allowed and
-  costs exactly one block of delay. Feedback is a main source of chaos here.
+- Modules are processed in rack order. A cable from a module processed later
+  (or from itself) reads its previous block, so feedback is allowed and costs
+  exactly one block (64 samples) of delay. Feedback is a main source of chaos
+  here.
+- The graph owns knob smoothing and modulation: each knob's CV is added in
+  normalized knob space (logarithmic for frequencies and times), so modules
+  just receive per-sample parameter values.
+- Every module input is clamped to ±10 and NaN reads as 0, like the power
+  rails of a hardware modular. Without it, feedback through VCAs runs off to
+  infinity and a single non-finite sample poisons a filter's state for good.
+- The master soft-clips with `tanh` and mutes non-finite samples, so the
+  speakers never see an exploded patch.
 - The audio thread owns the graph, so it needs no lock. The UI talks to it
-  through a lock-free queue (`rtrb`) drained once per block, and parameters
-  are smoothed so changes never click.
-- The master module soft-clips with `tanh` and mutes non-finite samples:
-  feedback patches can explode, and the speakers should never see that.
+  through a lock-free queue (`rtrb`) drained once per block, and keeps its own
+  mirror of the patch for display. Nothing on the audio thread allocates:
+  delay lines are allocated up front and cables live in a fixed-capacity set.
+- The rack is fixed for now: modules cannot be added or removed at runtime.
 - The engine is a library that renders offline, so it is fully testable
-  without any audio hardware.
+  without any audio hardware. A fuzz test renders random patches with random
+  knob settings and checks the output stays finite and bounded.
 
 ## Build, run, test
 
@@ -40,3 +80,9 @@ just fmt
 
 [`just`](https://github.com/casey/just) is optional; the recipes are thin
 wrappers around the usual `cargo` commands in the `justfile`.
+
+Dev builds use `opt-level = 1`: unoptimized DSP made the stability tests
+slow and risked audio dropouts.
+
+The header shows an audio error count. One error at startup is normal with
+the ALSA backend; a count that keeps rising means buffer underruns.

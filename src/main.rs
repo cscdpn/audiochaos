@@ -1,48 +1,18 @@
 use std::error::Error;
-use std::io::{self, BufRead, Write};
 
 use audiochaos::engine::audio;
 use audiochaos::engine::control::Engine;
-use audiochaos::engine::graph::{Cable, Graph};
-use audiochaos::modules::master::{self, Master};
-use audiochaos::modules::oscillator::{self, Oscillator};
+use audiochaos::rack;
+use audiochaos::tui::{self, App};
 
-/// Temporary command-line front end: plays a sine and reads new frequencies
-/// from stdin. It will be replaced by the TUI.
+/// Room for a burst of key presses even if the audio thread stalls briefly.
+const COMMAND_QUEUE_CAPACITY: usize = 1024;
+
 fn main() -> Result<(), Box<dyn Error>> {
     let (device, config) = audio::default_output()?;
-    let sample_rate = config.sample_rate as f32;
-
-    let mut graph = Graph::new(sample_rate);
-    let osc = graph.add("osc", Box::new(Oscillator::new(sample_rate)));
-    graph.set_param(osc, oscillator::FREQ, 220.0);
-    let out = graph.add("master", Box::new(Master));
-    graph.connect(Cable {
-        from: osc,
-        from_port: oscillator::OUT_SINE,
-        to: out,
-        to_port: master::IN,
-    })?;
-
-    let (engine, mut controller) = Engine::new(graph, out, 64);
-    let _stream = audio::play(&device, config, engine)?;
-
-    println!("Playing a 220 Hz sine. Type a frequency in Hz and press Enter, or q to quit.");
-    for line in io::stdin().lock().lines() {
-        let line = line?;
-        match line.trim() {
-            "q" => break,
-            text => match text.parse::<f32>() {
-                Ok(freq) => {
-                    if controller.set_param(osc, oscillator::FREQ, freq).is_err() {
-                        eprintln!("audio thread is not keeping up, command dropped");
-                    }
-                }
-                Err(_) => eprintln!("not a number: {text}"),
-            },
-        }
-        print!("> ");
-        io::stdout().flush()?;
-    }
+    let (graph, output) = rack::build(config.sample_rate as f32)?;
+    let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
+    let playback = audio::play(&device, config, engine)?;
+    tui::run(App::new(controller), &playback)?;
     Ok(())
 }

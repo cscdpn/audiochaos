@@ -1,6 +1,8 @@
 //! The only part of the engine that touches the sound card.
 
 use std::error::Error;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
@@ -22,13 +24,28 @@ pub fn default_output() -> Result<(Device, StreamConfig), Box<dyn Error>> {
     Ok((device, supported.config()))
 }
 
-/// Starts playing. Sound stops when the returned stream is dropped.
+/// A running audio stream. Sound stops when it is dropped.
+pub struct Playback {
+    _stream: Stream,
+    errors: Arc<AtomicUsize>,
+}
+
+impl Playback {
+    /// Stream errors so far, mostly buffer underruns. Counted rather than
+    /// printed, because printing would corrupt the TUI.
+    pub fn errors(&self) -> usize {
+        self.errors.load(Ordering::Relaxed)
+    }
+}
+
 pub fn play(
     device: &Device,
     config: StreamConfig,
     mut engine: Engine,
-) -> Result<Stream, Box<dyn Error>> {
+) -> Result<Playback, Box<dyn Error>> {
     let channels = config.channels as usize;
+    let errors = Arc::new(AtomicUsize::new(0));
+    let error_count = Arc::clone(&errors);
     let stream = device.build_output_stream(
         config,
         move |data: &mut [f32], _| {
@@ -37,9 +54,14 @@ pub fn play(
                 frame.fill(engine.next_sample());
             }
         },
-        |err| eprintln!("audio stream error: {err}"),
+        move |_| {
+            error_count.fetch_add(1, Ordering::Relaxed);
+        },
         None,
     )?;
     stream.play()?;
-    Ok(stream)
+    Ok(Playback {
+        _stream: stream,
+        errors,
+    })
 }
