@@ -25,8 +25,12 @@ Requires a recent stable Rust toolchain and, on Linux, the ALSA development
 headers (`alsa-lib` on Arch, `libasound2-dev` on Debian/Ubuntu).
 
 ```sh
-cargo build
-cargo run
-cargo test
-cargo fmt --check && cargo clippy --all-targets -- -D warnings
+just build
+just run
+just test
+just lint   # cargo fmt --check + clippy
+just fmt
 ```
+
+[`just`](https://github.com/casey/just) is optional; the recipes are thin
+wrappers around the usual `cargo` commands in the `justfile`.
