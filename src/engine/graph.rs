@@ -1,3 +1,6 @@
+use std::error::Error;
+use std::fmt;
+
 use super::module::{BLOCK, Buffer, Module};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,6 +18,16 @@ pub struct Cable {
 pub enum GraphError {
     NoSuchPort,
 }
+
+impl fmt::Display for GraphError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GraphError::NoSuchPort => write!(f, "no such port"),
+        }
+    }
+}
+
+impl Error for GraphError {}
 
 struct Node {
     module: Box<dyn Module>,
@@ -55,6 +68,10 @@ impl Graph {
         }
         self.cables.push(cable);
         Ok(())
+    }
+
+    pub fn set_param(&mut self, node: NodeId, param: usize, value: f32) {
+        self.nodes[node.0].module.set_param(param, value);
     }
 
     pub fn process(&mut self) {

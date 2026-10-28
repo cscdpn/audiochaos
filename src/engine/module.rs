@@ -14,4 +14,7 @@ pub trait Module: Send {
     /// An input with no cable plugged in is a buffer of zeros; several cables
     /// into one input are summed by the graph.
     fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]);
+
+    /// Sets a knob. Unknown indices are ignored.
+    fn set_param(&mut self, _param: usize, _value: f32) {}
 }
