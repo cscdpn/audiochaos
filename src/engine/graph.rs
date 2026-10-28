@@ -8,6 +8,12 @@ use super::param::Smoothed;
 /// connecting from the audio thread never allocates.
 pub const MAX_CABLES: usize = 256;
 
+/// Every input is clamped to ±RAIL, like the power rails of a hardware
+/// modular, and NaN reads as 0. Feedback loops through VCAs multiply without
+/// bound, and a single non-finite sample reaching a filter would poison its
+/// state forever; with the rails every module only ever sees finite input.
+pub const RAIL: f32 = 10.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NodeId(pub(crate) usize);
 
@@ -195,6 +201,15 @@ impl Graph {
                     *t += s;
                 }
             }
+            for input in &mut self.nodes[i].inputs {
+                for s in input.iter_mut() {
+                    *s = if s.is_nan() {
+                        0.0
+                    } else {
+                        s.clamp(-RAIL, RAIL)
+                    };
+                }
+            }
 
             let Node {
                 module,
@@ -217,6 +232,11 @@ impl Graph {
 
     pub fn output(&self, node: NodeId, port: usize) -> &Buffer {
         &self.nodes[node.0].outputs[port]
+    }
+
+    /// Every output buffer of a node, for inspecting the whole graph.
+    pub fn outputs(&self, node: NodeId) -> &[Buffer] {
+        &self.nodes[node.0].outputs
     }
 
     /// Renders at least `samples` samples of one output port, offline.
@@ -263,6 +283,22 @@ mod tests {
         }
     }
 
+    /// Outputs a fixed value, whatever it is.
+    struct Emit(f32);
+    static EMIT: ModuleInfo = ModuleInfo {
+        inputs: &[],
+        outputs: &["out"],
+        params: &[],
+    };
+    impl Module for Emit {
+        fn info(&self) -> &'static ModuleInfo {
+            &EMIT
+        }
+        fn process(&mut self, _: &[Buffer], _: &[Buffer], outputs: &mut [Buffer]) {
+            outputs[0].fill(self.0);
+        }
+    }
+
     fn cable(from: NodeId, to: NodeId) -> Cable {
         Cable {
             from,
@@ -301,6 +337,24 @@ mod tests {
         let mut g = Graph::new(SR);
         let a = g.add("a", Box::new(Offset));
         assert!(g.render(a, 0, 100).iter().all(|&s| close(s, 1.0)));
+    }
+
+    #[test]
+    fn inputs_are_clamped_to_the_rails() {
+        for (value, expected) in [
+            (1e9, RAIL),
+            (f32::INFINITY, RAIL),
+            (f32::NEG_INFINITY, -RAIL),
+            (f32::NAN, 0.0),
+        ] {
+            let mut g = Graph::new(SR);
+            let src = g.add("src", Box::new(Emit(value)));
+            let a = g.add("a", Box::new(Offset));
+            g.set_param(a, 0, 0.0);
+            g.connect(cable(src, a)).unwrap();
+            let out = g.render(a, 0, 4800);
+            assert!(close(out[4799], expected), "{value} gave {}", out[4799]);
+        }
     }
 
     #[test]
