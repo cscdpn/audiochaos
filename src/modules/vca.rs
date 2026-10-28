@@ -1,47 +1,39 @@
-use crate::engine::module::{Buffer, Module};
-use crate::engine::param::Smoothed;
+use crate::engine::module::{Buffer, Module, ModuleInfo};
+use crate::engine::param::{ParamInfo, Scale};
 
 pub const IN_SIGNAL: usize = 0;
-/// Added to the gain knob, so an LFO here gives tremolo and an audio-rate
-/// signal gives amplitude modulation.
-pub const IN_CV: usize = 1;
+/// Added to the gain, unclamped: an LFO here gives tremolo, an envelope or a
+/// gate shapes notes, and an audio-rate signal gives ring modulation.
+pub const IN_MOD: usize = 1;
 
 pub const OUT: usize = 0;
 
 pub const GAIN: usize = 0;
 
-/// Voltage-controlled amplifier: `out = signal * (gain + cv)`.
-pub struct Vca {
-    gain: Smoothed,
-}
+pub static INFO: ModuleInfo = ModuleInfo {
+    inputs: &["in", "mod"],
+    outputs: &["out"],
+    params: &[ParamInfo {
+        name: "gain",
+        min: 0.0,
+        max: 2.0,
+        default: 1.0,
+        scale: Scale::Linear,
+        unit: "",
+    }],
+};
 
-impl Vca {
-    pub fn new(sample_rate: f32, gain: f32) -> Self {
-        Self {
-            gain: Smoothed::new(gain, sample_rate),
-        }
-    }
-}
+/// Voltage-controlled amplifier: `out = in * (gain + mod)`.
+pub struct Vca;
 
 impl Module for Vca {
-    fn num_inputs(&self) -> usize {
-        2
+    fn info(&self) -> &'static ModuleInfo {
+        &INFO
     }
 
-    fn num_outputs(&self) -> usize {
-        1
-    }
-
-    fn process(&mut self, inputs: &[Buffer], outputs: &mut [Buffer]) {
-        let signal = inputs[IN_SIGNAL].iter().zip(inputs[IN_CV]);
-        for (out, (s, cv)) in outputs[OUT].iter_mut().zip(signal) {
-            *out = s * (self.gain.tick() + cv);
-        }
-    }
-
-    fn set_param(&mut self, param: usize, value: f32) {
-        if param == GAIN {
-            self.gain.set(value);
+    fn process(&mut self, inputs: &[Buffer], params: &[Buffer], outputs: &mut [Buffer]) {
+        for i in 0..outputs[OUT].len() {
+            outputs[OUT][i] = inputs[IN_SIGNAL][i] * (params[GAIN][i] + inputs[IN_MOD][i]);
         }
     }
 }
@@ -51,33 +43,28 @@ mod tests {
     use super::*;
     use crate::modules::test_util::run;
 
-    const SR: f32 = 48_000.0;
-
     #[test]
     fn gain_scales_the_signal() {
-        let mut vca = Vca::new(SR, 0.5);
         assert!(
-            run(&mut vca, &[0.8, 0.0], OUT, 10)
+            run(&mut Vca, &[0.8, 0.0], &[0.5], OUT, 10)
                 .iter()
                 .all(|&s| s == 0.4)
         );
     }
 
     #[test]
-    fn cv_adds_to_the_gain() {
-        let mut vca = Vca::new(SR, 0.5);
+    fn mod_adds_to_the_gain() {
         assert!(
-            run(&mut vca, &[2.0, 0.25], OUT, 10)
+            run(&mut Vca, &[2.0, 0.25], &[0.5], OUT, 10)
                 .iter()
                 .all(|&s| s == 1.5)
         );
     }
 
     #[test]
-    fn zero_gain_and_no_cv_is_silent() {
-        let mut vca = Vca::new(SR, 0.0);
+    fn zero_gain_and_no_mod_is_silent() {
         assert!(
-            run(&mut vca, &[1.0, 0.0], OUT, 10)
+            run(&mut Vca, &[1.0, 0.0], &[0.0], OUT, 10)
                 .iter()
                 .all(|&s| s == 0.0)
         );

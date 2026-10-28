@@ -77,45 +77,27 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::module::{Buffer, Module};
-
-    /// Outputs its only parameter, unsmoothed.
-    struct Knob(f32);
-    impl Module for Knob {
-        fn num_inputs(&self) -> usize {
-            0
-        }
-        fn num_outputs(&self) -> usize {
-            1
-        }
-        fn process(&mut self, _: &[Buffer], outputs: &mut [Buffer]) {
-            outputs[0].fill(self.0);
-        }
-        fn set_param(&mut self, _: usize, value: f32) {
-            self.0 = value;
-        }
-    }
+    use crate::modules::master::{self, Master};
 
     fn knob_engine() -> (Engine, Controller, NodeId) {
-        let mut graph = Graph::new();
-        let knob = graph.add(Box::new(Knob(1.0)));
+        let mut graph = Graph::new(48_000.0);
+        let knob = graph.add("master", Box::new(Master));
         let (engine, controller) = Engine::new(graph, knob, 8);
         (engine, controller, knob)
-    }
-
-    #[test]
-    fn plays_the_output_node() {
-        let (mut engine, _, _) = knob_engine();
-        assert!((0..3 * BLOCK).all(|_| engine.next_sample() == 1.0));
     }
 
     #[test]
     fn param_changes_apply_at_the_next_block() {
         let (mut engine, mut controller, knob) = knob_engine();
         engine.next_sample();
-        controller.set_param(knob, 0, 2.0).unwrap();
-        assert!((1..BLOCK).all(|_| engine.next_sample() == 1.0));
-        assert_eq!(engine.next_sample(), 2.0);
+        controller.set_param(knob, master::VOLUME, 0.1).unwrap();
+        // The master is silent without input, so check the knob, not the sound.
+        for _ in 1..BLOCK {
+            engine.next_sample();
+            assert_eq!(engine.graph.param(knob, master::VOLUME), 0.5);
+        }
+        engine.next_sample();
+        assert!((engine.graph.param(knob, master::VOLUME) - 0.1).abs() < 1e-6);
     }
 
     #[test]

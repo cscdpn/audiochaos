@@ -13,9 +13,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (device, config) = audio::default_output()?;
     let sample_rate = config.sample_rate as f32;
 
-    let mut graph = Graph::new();
-    let osc = graph.add(Box::new(Oscillator::new(sample_rate, 220.0)));
-    let out = graph.add(Box::new(Master::new(sample_rate, 0.5)));
+    let mut graph = Graph::new(sample_rate);
+    let osc = graph.add("osc", Box::new(Oscillator::new(sample_rate)));
+    graph.set_param(osc, oscillator::FREQ, 220.0);
+    let out = graph.add("master", Box::new(Master));
     graph.connect(Cable {
         from: osc,
         from_port: oscillator::OUT_SINE,
