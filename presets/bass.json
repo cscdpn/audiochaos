@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "description": "A plain sequenced bassline, a calm place to start patching from.",
+  "knobs": {
+    "atten": {
+      "gain a": 1.0,
+      "gain b": 1.0,
+      "gain c": 1.0
+    },
+    "crush": {
+      "bits": 16.0,
+      "downsample": 1.0
+    },
+    "delay": {
+      "feedback": 0.5,
+      "mix": 0.5,
+      "time": 0.25
+    },
+    "dist": {
+      "drive": 4.0,
+      "fold": 0.0
+    },
+    "filter": {
+      "cutoff": 600.0,
+      "resonance": 0.6
+    },
+    "lfo": {
+      "rate": 1.0
+    },
+    "master": {
+      "volume": 0.5
+    },
+    "osc 1": {
+      "fm depth": 100.0,
+      "freq": 55.0
+    },
+    "osc 2": {
+      "fm depth": 100.0,
+      "freq": 110.0
+    },
+    "seq": {
+      "rate": 4.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.0753,
+      "step 4": 0.0,
+      "step 5": 0.043674,
+      "step 6": 0.0,
+      "step 7": 0.0753,
+      "step 8": 0.094125
+    },
+    "vca": {
+      "gain": 0.0
+    }
+  },
+  "cables": [
+    {
+      "from": "seq",
+      "output": "cv",
+      "to": "osc 1",
+      "input": "freq cv"
+    },
+    {
+      "from": "osc 1",
+      "output": "saw",
+      "to": "filter",
+      "input": "in"
+    },
+    {
+      "from": "filter",
+      "output": "lowpass",
+      "to": "vca",
+      "input": "in"
+    },
+    {
+      "from": "seq",
+      "output": "gate",
+      "to": "vca",
+      "input": "mod"
+    },
+    {
+      "from": "vca",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    }
+  ]
+}

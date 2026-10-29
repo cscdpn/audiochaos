@@ -23,6 +23,24 @@ Every knob has a matching `cv` input: patch any signal into it to modulate
 the knob. A ±1 signal sweeps the knob's whole range, so go through `atten`
 to make a modulation subtle or to invert it.
 
+### Patches
+
+A patch is a JSON file holding knob values and cables, with modules, knobs
+and ports referred to by name:
+
+```json
+{
+  "version": 1,
+  "knobs": { "osc 1": { "freq": 55.0 } },
+  "cables": [{ "from": "osc 1", "output": "saw", "to": "master", "input": "in" }]
+}
+```
+
+Knobs left out are at their default, so a patch always fully determines the
+sound. The built-in presets live in `presets/` in the same format and are
+compiled into the binary. `just run path/to/patch.json` starts on a patch
+file; an unknown module, knob or port is reported by name.
+
 ### Modules
 
 | Module | Does |
@@ -78,6 +96,7 @@ headers (`alsa-lib` on Arch, `libasound2-dev` on Debian/Ubuntu).
 just build
 just run          # chaos preset
 just run bass     # bass preset
+just run my.json  # a patch file
 just test
 just lint   # cargo fmt --check + clippy
 just fmt

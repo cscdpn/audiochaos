@@ -48,7 +48,7 @@ fn random_cable(g: &Graph, nodes: &[NodeId], rng: &mut Rng) -> Option<Cable> {
 /// resonance, feedback, drive and FM depth often end up maxed out).
 fn random_patch(seed: u64) -> (Graph, NodeId) {
     let mut rng = Rng(seed);
-    let (mut g, out) = rack::build(SR, rack::Preset::Chaos).unwrap();
+    let (mut g, out) = rack::build(SR, &rack::default_preset()).unwrap();
     let nodes: Vec<NodeId> = g.nodes().collect();
     for _ in 0..40 {
         if let Some(cable) = random_cable(&g, &nodes, &mut rng) {
@@ -86,7 +86,7 @@ fn random_patches_stay_finite_and_bounded() {
 
 #[test]
 fn self_feeding_loops_through_every_processor_stay_finite() {
-    let (mut g, out) = rack::build(SR, rack::Preset::Chaos).unwrap();
+    let (mut g, out) = rack::build(SR, &rack::default_preset()).unwrap();
     let nodes: Vec<NodeId> = g.nodes().collect();
     // Every module's first output into every input of itself and of the next
     // module: the densest feedback the rack allows without random choice.

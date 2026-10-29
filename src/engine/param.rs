@@ -30,6 +30,10 @@ pub struct ParamInfo {
 }
 
 impl ParamInfo {
+    pub fn clamp(&self, value: f32) -> f32 {
+        value.clamp(self.min, self.max)
+    }
+
     pub fn to_normalized(&self, value: f32) -> f32 {
         let n = match self.scale {
             Scale::Linear => (value - self.min) / (self.max - self.min),
@@ -68,10 +72,6 @@ impl Smoothed {
 
     pub fn set(&mut self, target: f32) {
         self.target = target;
-    }
-
-    pub fn target(&self) -> f32 {
-        self.target
     }
 
     /// Advances by one sample and returns the new value.

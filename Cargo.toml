@@ -7,6 +7,8 @@ edition = "2024"
 cpal = "0.18.2"
 ratatui = "0.30.2"
 rtrb = "0.4.1"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 
 # Unoptimized DSP is too slow: the stability tests take ~40 s and debug
 # builds risk audio dropouts. Light optimization keeps debugging usable.

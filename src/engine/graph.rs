@@ -106,6 +106,9 @@ struct Node {
     inputs: Vec<Buffer>,
     /// Knob positions, normalized.
     knobs: Vec<Smoothed>,
+    /// Knob values as set, in the parameters' units. Kept apart from the
+    /// normalized positions so reading a knob back gives exactly what was set.
+    settings: Vec<f32>,
     params: Vec<Buffer>,
     outputs: Vec<Buffer>,
 }
@@ -143,6 +146,7 @@ impl Graph {
             name: name.to_string(),
             inputs: vec![[0.0; BLOCK]; info.num_input_ports()],
             knobs,
+            settings: info.params.iter().map(|p| p.default).collect(),
             params: vec![[0.0; BLOCK]; info.params.len()],
             outputs: vec![[0.0; BLOCK]; info.outputs.len()],
             module,
@@ -163,14 +167,14 @@ impl Graph {
     /// Values outside the parameter's range are clamped.
     pub fn set_param(&mut self, node: NodeId, param: usize, value: f32) {
         let node = &mut self.nodes[node.0];
-        let n = node.module.info().params[param].to_normalized(value);
-        node.knobs[param].set(n);
+        let info = &node.module.info().params[param];
+        node.settings[param] = info.clamp(value);
+        node.knobs[param].set(info.to_normalized(value));
     }
 
     /// The value the knob is set to (not the modulated value).
     pub fn param(&self, node: NodeId, param: usize) -> f32 {
-        let node = &self.nodes[node.0];
-        node.module.info().params[param].from_normalized(node.knobs[param].target())
+        self.nodes[node.0].settings[param]
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = NodeId> + use<> {

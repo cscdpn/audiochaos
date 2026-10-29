@@ -1,0 +1,160 @@
+{
+  "version": 1,
+  "description": "Cross-modulated oscillators, folded, crushed and fed back through the delay. Three intertwined loops keep it from settling: the two oscillators frequency-modulate each other, the delay output feeds back into osc 1's FM, and random voltages from noise through s&h keep retuning osc 2.",
+  "knobs": {
+    "atten": {
+      "gain a": 0.15,
+      "gain b": 0.05,
+      "gain c": 1.0
+    },
+    "crush": {
+      "bits": 7.0,
+      "downsample": 2.0
+    },
+    "delay": {
+      "feedback": 0.9,
+      "mix": 0.35,
+      "time": 0.09
+    },
+    "dist": {
+      "drive": 10.0,
+      "fold": 0.6
+    },
+    "filter": {
+      "cutoff": 900.0,
+      "resonance": 0.8
+    },
+    "lfo": {
+      "rate": 5.0
+    },
+    "master": {
+      "volume": 0.6
+    },
+    "osc 1": {
+      "fm depth": 250.0,
+      "freq": 55.0
+    },
+    "osc 2": {
+      "fm depth": 120.0,
+      "freq": 82.0
+    },
+    "seq": {
+      "rate": 6.0,
+      "step 1": 0.3,
+      "step 2": -0.2,
+      "step 3": 0.0,
+      "step 4": 0.5,
+      "step 5": -0.4,
+      "step 6": 0.2,
+      "step 7": 0.6,
+      "step 8": -0.1
+    },
+    "vca": {
+      "gain": 0.25
+    }
+  },
+  "cables": [
+    {
+      "from": "noise",
+      "output": "white",
+      "to": "s&h",
+      "input": "in"
+    },
+    {
+      "from": "lfo",
+      "output": "square",
+      "to": "s&h",
+      "input": "trigger"
+    },
+    {
+      "from": "s&h",
+      "output": "out",
+      "to": "atten",
+      "input": "a"
+    },
+    {
+      "from": "atten",
+      "output": "a",
+      "to": "osc 2",
+      "input": "freq cv"
+    },
+    {
+      "from": "lfo",
+      "output": "sine",
+      "to": "atten",
+      "input": "b"
+    },
+    {
+      "from": "atten",
+      "output": "b",
+      "to": "delay",
+      "input": "time cv"
+    },
+    {
+      "from": "osc 2",
+      "output": "sine",
+      "to": "osc 1",
+      "input": "fm"
+    },
+    {
+      "from": "osc 1",
+      "output": "square",
+      "to": "osc 2",
+      "input": "fm"
+    },
+    {
+      "from": "delay",
+      "output": "out",
+      "to": "osc 1",
+      "input": "fm"
+    },
+    {
+      "from": "osc 1",
+      "output": "saw",
+      "to": "dist",
+      "input": "in"
+    },
+    {
+      "from": "dist",
+      "output": "out",
+      "to": "filter",
+      "input": "in"
+    },
+    {
+      "from": "filter",
+      "output": "lowpass",
+      "to": "crush",
+      "input": "in"
+    },
+    {
+      "from": "crush",
+      "output": "out",
+      "to": "delay",
+      "input": "in"
+    },
+    {
+      "from": "delay",
+      "output": "out",
+      "to": "vca",
+      "input": "in"
+    },
+    {
+      "from": "vca",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    },
+    {
+      "from": "seq",
+      "output": "gate",
+      "to": "vca",
+      "input": "mod"
+    },
+    {
+      "from": "seq",
+      "output": "cv",
+      "to": "filter",
+      "input": "cutoff cv"
+    }
+  ]
+}

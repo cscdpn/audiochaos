@@ -69,20 +69,13 @@ impl Controller {
         value: f32,
     ) -> Result<(), ControlError> {
         let info = &self.nodes[node.0].info.params[param];
-        let value = info.from_normalized(info.to_normalized(value));
+        let value = info.clamp(value);
         self.push(Command::SetParam { node, param, value })?;
         self.nodes[node.0].params[param] = value;
         Ok(())
     }
 
-    /// Connects the cable, or removes it if it is already there. Returns
-    /// whether it is now connected.
-    pub fn toggle_cable(&mut self, cable: Cable) -> Result<bool, ControlError> {
-        if self.cables.contains(cable) {
-            self.push(Command::Disconnect(cable))?;
-            self.cables.remove(cable);
-            return Ok(false);
-        }
+    pub fn connect(&mut self, cable: Cable) -> Result<(), ControlError> {
         let (from, to) = (self.nodes[cable.from.0].info, self.nodes[cable.to.0].info);
         self.cables
             .insert(cable, from, to)
@@ -91,7 +84,57 @@ impl Controller {
             self.cables.remove(cable);
             return Err(e);
         }
+        Ok(())
+    }
+
+    /// Returns whether the cable was there.
+    pub fn disconnect(&mut self, cable: Cable) -> Result<bool, ControlError> {
+        if !self.cables.contains(cable) {
+            return Ok(false);
+        }
+        self.push(Command::Disconnect(cable))?;
+        self.cables.remove(cable);
         Ok(true)
+    }
+
+    /// Connects the cable, or removes it if it is already there. Returns
+    /// whether it is now connected.
+    pub fn toggle_cable(&mut self, cable: Cable) -> Result<bool, ControlError> {
+        if self.disconnect(cable)? {
+            Ok(false)
+        } else {
+            self.connect(cable).map(|()| true)
+        }
+    }
+
+    /// Replaces every knob value and cable at once. Either all of it is
+    /// applied or, if the cables are invalid or the queue lacks room, none.
+    pub fn replace(
+        &mut self,
+        knobs: &[(NodeId, usize, f32)],
+        cables: &[Cable],
+    ) -> Result<(), ControlError> {
+        let mut new_cables = CableSet::new();
+        for &cable in cables {
+            let (from, to) = (self.nodes[cable.from.0].info, self.nodes[cable.to.0].info);
+            new_cables
+                .insert(cable, from, to)
+                .map_err(ControlError::Graph)?;
+        }
+        let needed = self.cables.as_slice().len() + cables.len() + knobs.len();
+        if self.commands.slots() < needed {
+            return Err(ControlError::QueueFull);
+        }
+        for cable in self.cables.as_slice().to_vec() {
+            self.disconnect(cable)?;
+        }
+        for &cable in cables {
+            self.connect(cable)?;
+        }
+        for &(node, param, value) in knobs {
+            self.set_param(node, param, value)?;
+        }
+        Ok(())
     }
 
     fn push(&mut self, command: Command) -> Result<(), ControlError> {
@@ -251,6 +294,38 @@ mod tests {
         run_block(&mut engine);
         assert!(engine.graph.cables().is_empty());
         assert!(controller.cables().is_empty());
+    }
+
+    #[test]
+    fn replace_swaps_the_whole_patch() {
+        let (mut engine, mut controller, amp, out) = engine(16);
+        let old = vca_to_master_mod(amp, out);
+        controller.connect(old).unwrap();
+        let new = Cable {
+            to: amp,
+            to_port: vca::IN_MOD,
+            ..old
+        };
+        controller
+            .replace(&[(out, master::VOLUME, 0.2)], &[new])
+            .unwrap();
+        assert_eq!(controller.cables(), [new]);
+        assert_eq!(controller.nodes()[out.0].params, [0.2]);
+        run_block(&mut engine);
+        assert_eq!(engine.graph.cables(), [new]);
+    }
+
+    #[test]
+    fn replace_applies_nothing_when_the_queue_lacks_room() {
+        let (_engine, mut controller, amp, out) = engine(2);
+        let knobs = [(out, master::VOLUME, 0.2), (amp, vca::GAIN, 0.3)];
+        let cables = [vca_to_master_mod(amp, out)];
+        assert_eq!(
+            controller.replace(&knobs, &cables),
+            Err(ControlError::QueueFull)
+        );
+        assert!(controller.cables().is_empty());
+        assert_eq!(controller.nodes()[out.0].params, [0.5]);
     }
 
     #[test]
