@@ -1,6 +1,7 @@
 //! The module library. Each module exposes its port and parameter indices as
 //! constants, so patches read as `oscillator::OUT_SAW` rather than `1`.
 
+pub mod atten;
 pub mod crusher;
 pub mod delay;
 pub mod distortion;

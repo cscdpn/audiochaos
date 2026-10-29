@@ -6,8 +6,10 @@ driven from a terminal UI.
 
 ## Using it
 
-`just run` starts the sound and the TUI. The rack starts on a simple
-sequenced bassline; everything else is up to you.
+`just run` starts the sound and the TUI on the `chaos` preset: two
+oscillators frequency-modulating each other, folded, crushed and fed back
+through the delay, with random voltages retuning them. `just run bass`
+starts on a plain sequenced bassline instead, a calm base to patch from.
 
 - **Knobs screen**: `↑↓` select a knob, `←→` turn it, `Shift+←→` (or `H`/`L`)
   turn it faster.
@@ -18,7 +20,8 @@ sequenced bassline; everything else is up to you.
 - `q` or `Esc` quits.
 
 Every knob has a matching `cv` input: patch any signal into it to modulate
-the knob. A ±1 signal sweeps the knob's whole range.
+the knob. A ±1 signal sweeps the knob's whole range, so go through `atten`
+to make a modulation subtle or to invert it.
 
 ### Modules
 
@@ -28,6 +31,7 @@ the knob. A ±1 signal sweeps the knob's whole range.
 | lfo | slow sine, triangle, saw and square |
 | noise | white noise |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
+| atten | three attenuverters: each output is its input times -1..1 |
 | osc 1, osc 2 | sine, saw, square, with through-zero linear FM |
 | filter | resonant state-variable filter: lowpass, bandpass, highpass |
 | dist | drive into a blend of `tanh` clipping and sine wavefolding |
@@ -72,7 +76,8 @@ headers (`alsa-lib` on Arch, `libasound2-dev` on Debian/Ubuntu).
 
 ```sh
 just build
-just run
+just run          # chaos preset
+just run bass     # bass preset
 just test
 just lint   # cargo fmt --check + clippy
 just fmt

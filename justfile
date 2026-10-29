@@ -4,8 +4,9 @@ default:
 build:
     cargo build
 
-run:
-    cargo run
+# Plays a preset: `just run` (chaos) or `just run bass`.
+run *args:
+    cargo run -- {{args}}
 
 test:
     cargo test

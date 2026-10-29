@@ -192,7 +192,7 @@ mod tests {
     use crate::rack;
 
     fn app() -> App {
-        let (graph, out) = rack::build(48_000.0).unwrap();
+        let (graph, out) = rack::build(48_000.0, rack::Preset::Bass).unwrap();
         // The engine is dropped: commands pile up in the queue, which is
         // large enough for these tests.
         let (_, controller) = Engine::new(graph, out, 256);

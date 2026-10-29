@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn both_screens_render_the_rack() {
-        let (graph, out) = rack::build(48_000.0).unwrap();
+        let (graph, out) = rack::build(48_000.0, rack::Preset::Bass).unwrap();
         let (_, controller) = Engine::new(graph, out, 16);
         let mut app = App::new(controller);
 
