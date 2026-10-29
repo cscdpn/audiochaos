@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "knobs": {
+    "atten": {
+      "gain a": 0.0,
+      "gain b": 1.0,
+      "gain c": 1.0
+    },
+    "crush": {
+      "bits": 4.7,
+      "downsample": 9.5
+    },
+    "delay": {
+      "feedback": 0.5,
+      "mix": 0.5,
+      "time": 0.08
+    },
+    "dist": {
+      "drive": 27.0,
+      "fold": 0.39
+    },
+    "filter": {
+      "cutoff": 600.0,
+      "resonance": 0.6
+    },
+    "lfo": {
+      "rate": 0.09
+    },
+    "master": {
+      "volume": 0.5
+    },
+    "osc 1": {
+      "fm depth": 23.0,
+      "freq": 80.0
+    },
+    "osc 2": {
+      "fm depth": 300.0,
+      "freq": 55.0
+    },
+    "seq": {
+      "rate": 4.0,
+      "step 1": 0.0,
+      "step 2": 0.15,
+      "step 3": 0.03,
+      "step 4": -0.1,
+      "step 5": 0.15,
+      "step 6": -0.1,
+      "step 7": 0.0753,
+      "step 8": 0.094125
+    },
+    "vca": {
+      "gain": 0.77
+    }
+  },
+  "cables": [
+    {
+      "from": "seq",
+      "output": "cv",
+      "to": "osc 1",
+      "input": "freq cv"
+    },
+    {
+      "from": "osc 1",
+      "output": "saw",
+      "to": "filter",
+      "input": "in"
+    },
+    {
+      "from": "filter",
+      "output": "lowpass",
+      "to": "vca",
+      "input": "in"
+    },
+    {
+      "from": "lfo",
+      "output": "sine",
+      "to": "atten",
+      "input": "gain a cv"
+    },
+    {
+      "from": "vca",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    },
+    {
+      "from": "seq",
+      "output": "cv",
+      "to": "osc 2",
+      "input": "fm"
+    },
+    {
+      "from": "osc 2",
+      "output": "sine",
+      "to": "dist",
+      "input": "in"
+    },
+    {
+      "from": "dist",
+      "output": "out",
+      "to": "crush",
+      "input": "in"
+    },
+    {
+      "from": "atten",
+      "output": "a",
+      "to": "master",
+      "input": "in"
+    },
+    {
+      "from": "osc 2",
+      "output": "saw",
+      "to": "delay",
+      "input": "in"
+    },
+    {
+      "from": "delay",
+      "output": "out",
+      "to": "crush",
+      "input": "in"
+    },
+    {
+      "from": "crush",
+      "output": "out",
+      "to": "atten",
+      "input": "a"
+    },
+    {
+      "from": "seq",
+      "output": "gate",
+      "to": "vca",
+      "input": "in"
+    }
+  ],
+  "positions": {
+    "atten": [
+      1067.7452,
+      598.61224
+    ],
+    "crush": [
+      1092.1425,
+      476.84702
+    ],
+    "delay": [
+      372.9096,
+      661.86456
+    ],
+    "dist": [
+      903.0325,
+      299.17123
+    ],
+    "filter": [
+      770.2754,
+      -33.899395
+    ],
+    "lfo": [
+      506.5078,
+      827.74524
+    ],
+    "master": [
+      1174.8094,
+      147.48291
+    ],
+    "noise": [
+      0.0,
+      460.0
+    ],
+    "osc 1": [
+      166.29393,
+      -48.730747
+    ],
+    "osc 2": [
+      302.82825,
+      129.03842
+    ],
+    "s&h": [
+      1221.3088,
+      878.5755
+    ],
+    "seq": [
+      -305.5344,
+      -13.056881
+    ],
+    "vca": [
+      546.8602,
+      460.6704
+    ]
+  }
+}
