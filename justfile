@@ -4,9 +4,13 @@ default:
 build:
     cargo build
 
-# Plays a preset: `just run` (chaos) or `just run bass`.
+# Opens the editor: `just run`, `just run bass`, `just run my.json`.
 run *args:
     cargo run -- {{args}}
+
+# Same, in the terminal UI.
+tui *args:
+    cargo run -- --tui {{args}}
 
 test:
     cargo test

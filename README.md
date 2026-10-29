@@ -2,14 +2,31 @@
 
 A modular synthesizer written in Rust, built for chaotic, aggressive sounds:
 small signal-processing bricks that you route together however you like,
-driven from a terminal UI.
+in a graphical node editor or a terminal UI.
 
 ## Using it
 
-`just run` starts the sound and the TUI on the `chaos` preset: two
+`just run` starts the sound and the editor on the `chaos` preset: two
 oscillators frequency-modulating each other, folded, crushed and fed back
 through the delay, with random voltages retuning them. `just run bass`
 starts on a plain sequenced bassline instead, a calm base to patch from.
+
+### Graphical editor
+
+One block per module, signal inputs (orange) and knob CV inputs (blue) on the
+left, outputs on the right, sliders for the knobs.
+
+- Drag from an output to an input to connect; drag a block by its title.
+- Right-click a wire to remove it, or a pin to remove all of its wires.
+- Ctrl+drag from a pin picks up its wires to move them to another pin;
+  dropping them on nothing removes them.
+- The canvas pans and zooms with the mouse.
+- **Patch** menu: load a built-in preset, **Import…** a patch file, or
+  **Export…** the current patch, block positions included.
+
+### Terminal UI
+
+`just tui` (or `--tui`) runs the same synth in the terminal, handy over SSH.
 
 - **Knobs screen**: `↑↓` select a knob, `←→` turn it, `Shift+←→` (or `H`/`L`)
   turn it faster.
@@ -39,7 +56,9 @@ and ports referred to by name:
 Knobs left out are at their default, so a patch always fully determines the
 sound. The built-in presets live in `presets/` in the same format and are
 compiled into the binary. `just run path/to/patch.json` starts on a patch
-file; an unknown module, knob or port is reported by name.
+file; an unknown module, knob or port is reported by name. Block positions
+from the graphical editor are saved under `positions`; the terminal UI
+ignores them.
 
 ### Modules
 
@@ -80,7 +99,12 @@ patch noise through `s&h` into a `freq cv`.
   speakers never see an exploded patch.
 - The audio thread owns the graph, so it needs no lock. The UI talks to it
   through a lock-free queue (`rtrb`) drained once per block, and keeps its own
-  mirror of the patch for display. Nothing on the audio thread allocates:
+  mirror of the patch for display. Both front ends are clients of that same
+  `Controller`; in the editor, a wire is drawn only once the controller has
+  accepted the cable.
+- The editor uses `eframe` with the glow (OpenGL) backend rather than the
+  default wgpu, for far fewer dependencies, and is pinned to 0.36 because the
+  node-graph widget, `egui-snarl` 0.12, is built on egui 0.36. Nothing on the audio thread allocates:
   delay lines are allocated up front and cables live in a fixed-capacity set.
 - The rack is fixed for now: modules cannot be added or removed at runtime.
 - The engine is a library that renders offline, so it is fully testable
@@ -97,6 +121,7 @@ just build
 just run          # chaos preset
 just run bass     # bass preset
 just run my.json  # a patch file
+just tui          # terminal UI instead of the editor
 just test
 just lint   # cargo fmt --check + clippy
 just fmt

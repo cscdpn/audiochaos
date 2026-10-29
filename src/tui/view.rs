@@ -60,7 +60,7 @@ fn draw_knobs(frame: &mut Frame, area: Rect, app: &App) {
                 "  {:<10} {} {}",
                 info.name,
                 bar(info.to_normalized(value)),
-                format_value(value, info.unit)
+                info.format(value)
             )));
         }
     }
@@ -167,18 +167,6 @@ fn bar(normalized: f32) -> String {
     format!("{}{}", "█".repeat(filled), "░".repeat(BAR_WIDTH - filled))
 }
 
-fn format_value(value: f32, unit: &str) -> String {
-    match unit {
-        "Hz" if value >= 1000.0 => format!("{:.2} kHz", value / 1000.0),
-        "Hz" if value >= 100.0 => format!("{value:.0} Hz"),
-        "Hz" if value >= 10.0 => format!("{value:.1} Hz"),
-        "s" if value < 0.01 => format!("{:.1} ms", value * 1000.0),
-        "s" if value < 1.0 => format!("{:.0} ms", value * 1000.0),
-        "" => format!("{value:.2}"),
-        _ => format!("{value:.2} {unit}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,19 +175,6 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-
-    #[test]
-    fn values_are_shown_in_readable_units() {
-        assert_eq!(format_value(55.0, "Hz"), "55.0 Hz");
-        assert_eq!(format_value(440.0, "Hz"), "440 Hz");
-        assert_eq!(format_value(12_345.0, "Hz"), "12.35 kHz");
-        assert_eq!(format_value(0.5, "Hz"), "0.50 Hz");
-        assert_eq!(format_value(0.004, "s"), "4.0 ms");
-        assert_eq!(format_value(0.25, "s"), "250 ms");
-        assert_eq!(format_value(1.5, "s"), "1.50 s");
-        assert_eq!(format_value(-0.3, ""), "-0.30");
-        assert_eq!(format_value(4.0, "x"), "4.00 x");
-    }
 
     #[test]
     fn bar_fills_with_the_knob_position() {

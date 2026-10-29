@@ -34,6 +34,20 @@ impl ParamInfo {
         value.clamp(self.min, self.max)
     }
 
+    /// The value in readable units, as the UIs show it.
+    pub fn format(&self, value: f32) -> String {
+        let unit = self.unit;
+        match unit {
+            "Hz" if value >= 1000.0 => format!("{:.2} kHz", value / 1000.0),
+            "Hz" if value >= 100.0 => format!("{value:.0} Hz"),
+            "Hz" if value >= 10.0 => format!("{value:.1} Hz"),
+            "s" if value < 0.01 => format!("{:.1} ms", value * 1000.0),
+            "s" if value < 1.0 => format!("{:.0} ms", value * 1000.0),
+            "" => format!("{value:.2}"),
+            _ => format!("{value:.2} {unit}"),
+        }
+    }
+
     pub fn to_normalized(&self, value: f32) -> f32 {
         let n = match self.scale {
             Scale::Linear => (value - self.min) / (self.max - self.min),
@@ -101,6 +115,29 @@ mod tests {
             scale,
             unit: "",
         }
+    }
+
+    #[test]
+    fn values_are_shown_in_readable_units() {
+        let with_unit = |unit| ParamInfo {
+            unit,
+            ..param(Scale::Linear, 0.0, 1.0)
+        };
+        let (hz, s, none, x) = (
+            with_unit("Hz"),
+            with_unit("s"),
+            with_unit(""),
+            with_unit("x"),
+        );
+        assert_eq!(hz.format(55.0), "55.0 Hz");
+        assert_eq!(hz.format(440.0), "440 Hz");
+        assert_eq!(hz.format(12_345.0), "12.35 kHz");
+        assert_eq!(hz.format(0.5), "0.50 Hz");
+        assert_eq!(s.format(0.004), "4.0 ms");
+        assert_eq!(s.format(0.25), "250 ms");
+        assert_eq!(s.format(1.5), "1.50 s");
+        assert_eq!(none.format(-0.3), "-0.30");
+        assert_eq!(x.format(4.0), "4.00 x");
     }
 
     #[test]
