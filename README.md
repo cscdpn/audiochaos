@@ -9,13 +9,17 @@ in a graphical node editor or a terminal UI.
 `just run` starts the sound and the editor on the `chaos` preset: two
 oscillators frequency-modulating each other, folded, crushed and fed back
 through the delay, with random voltages retuning them. `just run bass`
-starts on a plain sequenced bassline instead, a calm base to patch from.
+starts on a plain sequenced bassline instead, a calm base to patch from, and
+`just run groovygroove` on a groovier one.
 
 ### Graphical editor
 
 One block per module, signal inputs (orange) and knob CV inputs (blue) on the
 left, outputs on the right, sliders for the knobs.
 
+- Right-click the canvas to add a module where you clicked; right-click a
+  block's title to remove it. New modules are named after their type
+  (`filter`, `filter 2`…). The master is the one output and stays.
 - Drag from an output to an input to connect; drag a block by its title.
 - Right-click a wire to remove it, or a pin to remove all of its wires.
 - Ctrl+drag from a pin picks up its wires to move them to another pin;
@@ -28,6 +32,8 @@ left, outputs on the right, sliders for the knobs.
 ### Terminal UI
 
 `just tui` (or `--tui`) runs the same synth in the terminal, handy over SSH.
+It patches and tweaks the modules of the patch it starts on, but cannot add
+or remove modules.
 
 - **Knobs screen**: `↑↓` select a knob, `←→` turn it, `Shift+←→` (or `H`/`L`)
   turn it faster.
@@ -61,34 +67,42 @@ file.
 
 ### Patches
 
-A patch is a JSON file holding knob values and cables, with modules, knobs
-and ports referred to by name:
+A patch is a JSON file listing its modules, knob values and cables, with
+modules, knobs and ports referred to by name:
 
 ```json
 {
-  "version": 1,
+  "version": 2,
+  "modules": [
+    { "name": "osc 1", "type": "osc" },
+    { "name": "master", "type": "master" }
+  ],
   "knobs": { "osc 1": { "freq": 55.0 } },
   "cables": [{ "from": "osc 1", "output": "saw", "to": "master", "input": "in" }]
 }
 ```
 
-Knobs left out are at their default, so a patch always fully determines the
-sound. The built-in presets live in `presets/` in the same format and are
-compiled into the binary. `just run path/to/patch.json` starts on a patch
+Modules are processed in the order listed, and a patch needs exactly one
+`master`. Knobs left out are at their default, so a patch always fully
+determines the sound. Version 1 files, from before modules could be added
+and removed, still load: they get the old fixed rack. The built-in presets
+live in `presets/` in the same format and are compiled into the binary. `just run path/to/patch.json` starts on a patch
 file; an unknown module, knob or port is reported by name. Block positions
 from the graphical editor are saved under `positions`; the terminal UI
 ignores them.
 
 ### Modules
 
-| Module | Does |
+Module types, as patches and the editor's palette name them:
+
+| Type | Does |
 |---|---|
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
 | noise | white noise |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
 | atten | three attenuverters: each output is its input times -1..1 |
-| osc 1, osc 2 | sine, saw, square, with through-zero linear FM |
+| osc | sine, saw, square, with through-zero linear FM |
 | filter | resonant state-variable filter: lowpass, bandpass, highpass |
 | dist | drive into a blend of `tanh` clipping and sine wavefolding |
 | crush | bitcrusher: bit depth and sample-rate reduction |
@@ -104,8 +118,8 @@ patch noise through `s&h` into a `freq cv`.
 
 - Audio and control signals share the same `f32` buffers, like voltages in a
   hardware modular.
-- Modules are processed in rack order. A cable from a module processed later
-  (or from itself) reads its previous block, so feedback is allowed and costs
+- Modules are processed in the order they were added. A cable from a module
+  processed later (or from itself) reads its previous block, so feedback is allowed and costs
   exactly one block (64 samples) of delay. Feedback is a main source of chaos
   here.
 - The graph owns knob smoothing and modulation: each knob's CV is added in
@@ -127,9 +141,14 @@ patch noise through `s&h` into a `freq cv`.
   counted rather than glitching the sound.
 - The editor uses `eframe` with the glow (OpenGL) backend rather than the
   default wgpu, for far fewer dependencies, and is pinned to 0.36 because the
-  node-graph widget, `egui-snarl` 0.12, is built on egui 0.36. Nothing on the audio thread allocates:
-  delay lines are allocated up front and cables live in a fixed-capacity set.
-- The rack is fixed for now: modules cannot be added or removed at runtime.
+  node-graph widget, `egui-snarl` 0.12, is built on egui 0.36.
+- Nothing on the audio thread allocates: delay lines are allocated up front
+  and cables live in a fixed-capacity set.
+- Adding a module builds it on the UI thread, buffers included, and moves it
+  to the audio thread whole; a removed module travels back through a second
+  queue to be freed on the UI thread. Modules sit in a fixed number of
+  preallocated slots (64), so neither side ever reallocates. Loading a patch
+  swaps in a whole new graph in one go.
 - The engine is a library that renders offline, so it is fully testable
   without any audio hardware. A fuzz test renders random patches with random
   knob settings and checks the output stays finite and bounded.

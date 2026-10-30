@@ -186,7 +186,7 @@ fn bar(normalized: f32) -> String {
 mod tests {
     use super::*;
     use crate::engine::control::Engine;
-    use crate::rack;
+    use crate::presets;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -216,8 +216,8 @@ mod tests {
     }
 
     #[test]
-    fn both_screens_render_the_rack() {
-        let (graph, out) = rack::build(48_000.0, &rack::preset("bass").unwrap()).unwrap();
+    fn both_screens_render_the_patch() {
+        let (graph, out) = presets::get("bass").unwrap().build(48_000.0).unwrap();
         let (_, controller) = Engine::new(graph, out, 16);
         let mut app = App::new(controller);
 

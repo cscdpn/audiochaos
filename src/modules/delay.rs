@@ -12,6 +12,7 @@ pub const MIX: usize = 2;
 const MAX_SECONDS: f32 = 2.0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "delay",
     inputs: &["in"],
     outputs: &["out"],
     params: &[

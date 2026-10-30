@@ -8,6 +8,9 @@ use super::param::Smoothed;
 /// connecting from the audio thread never allocates.
 pub const MAX_CABLES: usize = 256;
 
+/// Modules live in this many slots, allocated once for the same reason.
+pub const MAX_MODULES: usize = 64;
+
 /// Every input is clamped to ±RAIL, like the power rails of a hardware
 /// modular, and NaN reads as 0. Feedback loops through VCAs multiply without
 /// bound, and a single non-finite sample reaching a filter would poison its
@@ -84,6 +87,11 @@ impl CableSet {
         }
     }
 
+    /// Removes every cable from or to `node`.
+    pub fn remove_node(&mut self, node: NodeId) {
+        self.0.retain(|c| c.from != node && c.to != node);
+    }
+
     pub fn contains(&self, cable: Cable) -> bool {
         self.0.contains(&cable)
     }
@@ -99,7 +107,18 @@ impl Default for CableSet {
     }
 }
 
-struct Node {
+/// The lowest slot not used by `taken`, if any is left.
+pub fn free_slot(taken: impl Iterator<Item = NodeId>) -> Option<NodeId> {
+    let mut used = [false; MAX_MODULES];
+    for id in taken {
+        used[id.0] = true;
+    }
+    used.iter().position(|&u| !u).map(NodeId)
+}
+
+/// A module with its buffers. Built on the UI thread, where allocating is
+/// fine, and moved to the audio thread whole.
+pub struct Node {
     name: String,
     module: Box<dyn Module>,
     /// Signal inputs followed by parameter CV inputs.
@@ -113,12 +132,39 @@ struct Node {
     outputs: Vec<Buffer>,
 }
 
-/// Modules are processed in insertion order. A cable coming from a module
-/// processed later (or from the module itself) reads that module's previous
-/// block, so feedback loops are legal and get exactly one block of delay.
+impl Node {
+    /// Knobs start at their defaults.
+    pub fn new(name: &str, module: Box<dyn Module>, sample_rate: f32) -> Self {
+        let info = module.info();
+        let knobs = info
+            .params
+            .iter()
+            .map(|p| Smoothed::new(p.to_normalized(p.default), sample_rate))
+            .collect();
+        Self {
+            name: name.to_string(),
+            inputs: vec![[0.0; BLOCK]; info.num_input_ports()],
+            knobs,
+            settings: info.params.iter().map(|p| p.default).collect(),
+            params: vec![[0.0; BLOCK]; info.params.len()],
+            outputs: vec![[0.0; BLOCK]; info.outputs.len()],
+            module,
+        }
+    }
+}
+
+/// Modules are processed in the order they were added. A cable coming from a
+/// module processed later (or from the module itself) reads that module's
+/// previous block, so feedback loops are legal and get exactly one block of
+/// delay.
+///
+/// Each module sits in a fixed slot, its [`NodeId`], so removing one leaves
+/// the others' ids and cables alone. Slots and the processing order are
+/// allocated up front: adding and removing modules never allocates.
 pub struct Graph {
     sample_rate: f32,
-    nodes: Vec<Node>,
+    slots: Vec<Option<Box<Node>>>,
+    order: Vec<NodeId>,
     cables: CableSet,
 }
 
@@ -126,7 +172,8 @@ impl Graph {
     pub fn new(sample_rate: f32) -> Self {
         Self {
             sample_rate,
-            nodes: Vec::new(),
+            slots: (0..MAX_MODULES).map(|_| None).collect(),
+            order: Vec::with_capacity(MAX_MODULES),
             cables: CableSet::new(),
         }
     }
@@ -135,23 +182,36 @@ impl Graph {
         self.sample_rate
     }
 
+    pub fn is_full(&self) -> bool {
+        self.order.len() == MAX_MODULES
+    }
+
+    /// Adds a module in the first free slot.
+    ///
+    /// Panics if the graph [is full](Self::is_full).
     pub fn add(&mut self, name: &str, module: Box<dyn Module>) -> NodeId {
-        let info = module.info();
-        let knobs = info
-            .params
-            .iter()
-            .map(|p| Smoothed::new(p.to_normalized(p.default), self.sample_rate))
-            .collect();
-        self.nodes.push(Node {
-            name: name.to_string(),
-            inputs: vec![[0.0; BLOCK]; info.num_input_ports()],
-            knobs,
-            settings: info.params.iter().map(|p| p.default).collect(),
-            params: vec![[0.0; BLOCK]; info.params.len()],
-            outputs: vec![[0.0; BLOCK]; info.outputs.len()],
-            module,
-        });
-        NodeId(self.nodes.len() - 1)
+        let id = free_slot(self.nodes()).expect("the graph is full");
+        self.insert(id, Box::new(Node::new(name, module, self.sample_rate)));
+        id
+    }
+
+    /// Puts a node in the given slot, last in processing order. Does not
+    /// allocate, so the audio thread can call it.
+    ///
+    /// Panics if the slot is taken.
+    pub fn insert(&mut self, id: NodeId, node: Box<Node>) {
+        assert!(self.slots[id.0].is_none(), "slot {} is taken", id.0);
+        self.slots[id.0] = Some(node);
+        self.order.push(id);
+    }
+
+    /// Takes a module out with its cables, and returns it so the caller
+    /// chooses where it is freed. Does not allocate or free.
+    pub fn remove(&mut self, id: NodeId) -> Option<Box<Node>> {
+        let node = self.slots[id.0].take()?;
+        self.order.retain(|&n| n != id);
+        self.cables.remove_node(id);
+        Some(node)
     }
 
     pub fn connect(&mut self, cable: Cable) -> Result<(), GraphError> {
@@ -164,9 +224,17 @@ impl Graph {
         self.cables.remove(cable)
     }
 
+    fn node(&self, id: NodeId) -> &Node {
+        self.slots[id.0].as_ref().expect("no module in this slot")
+    }
+
+    fn node_mut(&mut self, id: NodeId) -> &mut Node {
+        self.slots[id.0].as_mut().expect("no module in this slot")
+    }
+
     /// Values outside the parameter's range are clamped.
     pub fn set_param(&mut self, node: NodeId, param: usize, value: f32) {
-        let node = &mut self.nodes[node.0];
+        let node = self.node_mut(node);
         let info = &node.module.info().params[param];
         node.settings[param] = info.clamp(value);
         node.knobs[param].set(info.to_normalized(value));
@@ -174,19 +242,20 @@ impl Graph {
 
     /// The value the knob is set to (not the modulated value).
     pub fn param(&self, node: NodeId, param: usize) -> f32 {
-        self.nodes[node.0].settings[param]
+        self.node(node).settings[param]
     }
 
-    pub fn nodes(&self) -> impl Iterator<Item = NodeId> + use<> {
-        (0..self.nodes.len()).map(NodeId)
+    /// The modules, in processing order.
+    pub fn nodes(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.order.iter().copied()
     }
 
     pub fn name(&self, node: NodeId) -> &str {
-        &self.nodes[node.0].name
+        &self.node(node).name
     }
 
     pub fn info(&self, node: NodeId) -> &'static ModuleInfo {
-        self.nodes[node.0].module.info()
+        self.node(node).module.info()
     }
 
     pub fn cables(&self) -> &[Cable] {
@@ -194,18 +263,23 @@ impl Graph {
     }
 
     pub fn process(&mut self) {
-        for i in 0..self.nodes.len() {
-            for input in &mut self.nodes[i].inputs {
+        for k in 0..self.order.len() {
+            let id = self.order[k];
+            let mut node = self.slots[id.0].take().expect("ordered modules exist");
+            for input in &mut node.inputs {
                 input.fill(0.0);
             }
-            for cable in self.cables.as_slice().iter().filter(|c| c.to.0 == i) {
-                let source = self.nodes[cable.from.0].outputs[cable.from_port];
-                let target = &mut self.nodes[i].inputs[cable.to_port];
-                for (t, s) in target.iter_mut().zip(source) {
+            for cable in self.cables.as_slice().iter().filter(|c| c.to == id) {
+                // A module's own output is still in `node`, out of its slot.
+                let source = match &self.slots[cable.from.0] {
+                    Some(from) => from.outputs[cable.from_port],
+                    None => node.outputs[cable.from_port],
+                };
+                for (t, s) in node.inputs[cable.to_port].iter_mut().zip(source) {
                     *t += s;
                 }
             }
-            for input in &mut self.nodes[i].inputs {
+            for input in &mut node.inputs {
                 for s in input.iter_mut() {
                     *s = if s.is_nan() {
                         0.0
@@ -222,7 +296,7 @@ impl Graph {
                 params,
                 outputs,
                 ..
-            } = &mut self.nodes[i];
+            } = &mut *node;
             let info = module.info();
             let (signals, cvs) = inputs.split_at(info.inputs.len());
             for (p, ((buffer, knob), cv)) in params.iter_mut().zip(knobs).zip(cvs).enumerate() {
@@ -231,16 +305,17 @@ impl Graph {
                 }
             }
             module.process(signals, params, outputs);
+            self.slots[id.0] = Some(node);
         }
     }
 
     pub fn output(&self, node: NodeId, port: usize) -> &Buffer {
-        &self.nodes[node.0].outputs[port]
+        &self.node(node).outputs[port]
     }
 
     /// Every output buffer of a node, for inspecting the whole graph.
     pub fn outputs(&self, node: NodeId) -> &[Buffer] {
-        &self.nodes[node.0].outputs
+        &self.node(node).outputs
     }
 
     /// Renders at least `samples` samples of one output port, offline.
@@ -265,6 +340,7 @@ mod tests {
     /// Outputs its input plus its `offset` knob.
     struct Offset;
     static OFFSET: ModuleInfo = ModuleInfo {
+        name: "offset",
         inputs: &["in"],
         outputs: &["out"],
         params: &[ParamInfo {
@@ -290,6 +366,7 @@ mod tests {
     /// Outputs a fixed value, whatever it is.
     struct Emit(f32);
     static EMIT: ModuleInfo = ModuleInfo {
+        name: "emit",
         inputs: &[],
         outputs: &["out"],
         params: &[],
@@ -439,6 +516,49 @@ mod tests {
         assert!(g.disconnect(cable(a, b)));
         assert!(!g.disconnect(cable(a, b)));
         assert!(g.cables().is_empty());
+    }
+
+    #[test]
+    fn removing_a_module_takes_its_cables_and_keeps_the_others_ids() {
+        let mut g = Graph::new(SR);
+        let a = g.add("a", Box::new(Offset));
+        let b = g.add("b", Box::new(Offset));
+        let c = g.add("c", Box::new(Offset));
+        g.connect(cable(a, b)).unwrap();
+        g.connect(cable(a, c)).unwrap();
+        let removed = g.remove(b).unwrap();
+        assert_eq!(removed.name, "b");
+        assert_eq!(g.cables(), [cable(a, c)]);
+        assert_eq!(g.nodes().collect::<Vec<_>>(), [a, c]);
+        assert_eq!(g.name(c), "c");
+        assert!(g.render(c, 0, 100).iter().all(|&s| close(s, 2.0)));
+        assert!(g.remove(b).is_none());
+    }
+
+    #[test]
+    fn a_freed_slot_is_reused_but_processed_last() {
+        let mut g = Graph::new(SR);
+        let a = g.add("a", Box::new(Offset));
+        let b = g.add("b", Box::new(Offset));
+        g.remove(a);
+        let c = g.add("c", Box::new(Offset));
+        assert_eq!(c, a);
+        assert_eq!(g.nodes().collect::<Vec<_>>(), [b, c]);
+        // c now runs after b, so b -> c costs no delay.
+        g.connect(cable(b, c)).unwrap();
+        let out = g.render(c, 0, BLOCK);
+        assert!(close(out[0], 2.0));
+    }
+
+    #[test]
+    fn slots_run_out_at_the_cap() {
+        let mut g = Graph::new(SR);
+        for _ in 0..MAX_MODULES {
+            assert!(!g.is_full());
+            g.add("x", Box::new(Emit(0.0)));
+        }
+        assert!(g.is_full());
+        assert_eq!(free_slot(g.nodes()), None);
     }
 
     #[test]

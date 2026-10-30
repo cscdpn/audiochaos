@@ -13,6 +13,7 @@ pub const CUTOFF: usize = 0;
 pub const RESONANCE: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "filter",
     inputs: &["in"],
     outputs: &["lowpass", "bandpass", "highpass"],
     params: &[

@@ -11,6 +11,7 @@ pub const OUT_SQUARE: usize = 3;
 pub const RATE: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "lfo",
     inputs: &[],
     outputs: &["sine", "triangle", "saw", "square"],
     params: &[ParamInfo {

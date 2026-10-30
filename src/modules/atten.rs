@@ -20,6 +20,7 @@ const fn gain(name: &'static str) -> ParamInfo {
 }
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "atten",
     inputs: &["a", "b", "c"],
     outputs: &["a", "b", "c"],
     params: &[gain("gain a"), gain("gain b"), gain("gain c")],

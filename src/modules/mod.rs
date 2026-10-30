@@ -14,6 +14,60 @@ pub mod sample_hold;
 pub mod sequencer;
 pub mod vca;
 
+use crate::engine::module::{Module, ModuleInfo};
+
+/// Every kind of module, as patches and the editor's palette name them.
+pub const KINDS: [&ModuleInfo; 12] = [
+    &sequencer::INFO,
+    &lfo::INFO,
+    &noise::INFO,
+    &sample_hold::INFO,
+    &atten::INFO,
+    &oscillator::INFO,
+    &filter::INFO,
+    &distortion::INFO,
+    &crusher::INFO,
+    &delay::INFO,
+    &vca::INFO,
+    &master::INFO,
+];
+
+/// A new module of the given kind, or `None` if no kind has that name.
+/// `seed` makes each noise source different, yet reproducible.
+pub fn build(kind: &str, sample_rate: f32, seed: u32) -> Option<Box<dyn Module>> {
+    let sr = sample_rate;
+    let module: Box<dyn Module> = match kind {
+        "seq" => Box::new(sequencer::Sequencer::new(sr)),
+        "lfo" => Box::new(lfo::Lfo::new(sr)),
+        "noise" => Box::new(noise::Noise::new(seed)),
+        "s&h" => Box::new(sample_hold::SampleHold::new()),
+        "atten" => Box::new(atten::Atten),
+        "osc" => Box::new(oscillator::Oscillator::new(sr)),
+        "filter" => Box::new(filter::Filter::new(sr)),
+        "dist" => Box::new(distortion::Distortion),
+        "crush" => Box::new(crusher::Crusher::new()),
+        "delay" => Box::new(delay::Delay::new(sr)),
+        "vca" => Box::new(vca::Vca),
+        "master" => Box::new(master::Master),
+        _ => return None,
+    };
+    Some(module)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_kind_builds_a_module_of_that_kind() {
+        for info in KINDS {
+            let module = build(info.name, 48_000.0, 1).unwrap();
+            assert_eq!(module.info().name, info.name);
+        }
+        assert!(build("theremin", 48_000.0, 1).is_none());
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod test_util {
     use crate::engine::module::{BLOCK, Buffer, Module};

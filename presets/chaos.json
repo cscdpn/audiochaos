@@ -1,6 +1,60 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "Cross-modulated oscillators, folded, crushed and fed back through the delay. Three intertwined loops keep it from settling: the two oscillators frequency-modulate each other, the delay output feeds back into osc 1's FM, and random voltages from noise through s&h keep retuning osc 2.",
+  "modules": [
+    {
+      "name": "seq",
+      "type": "seq"
+    },
+    {
+      "name": "lfo",
+      "type": "lfo"
+    },
+    {
+      "name": "noise",
+      "type": "noise"
+    },
+    {
+      "name": "s&h",
+      "type": "s&h"
+    },
+    {
+      "name": "atten",
+      "type": "atten"
+    },
+    {
+      "name": "osc 1",
+      "type": "osc"
+    },
+    {
+      "name": "osc 2",
+      "type": "osc"
+    },
+    {
+      "name": "filter",
+      "type": "filter"
+    },
+    {
+      "name": "dist",
+      "type": "dist"
+    },
+    {
+      "name": "crush",
+      "type": "crush"
+    },
+    {
+      "name": "delay",
+      "type": "delay"
+    },
+    {
+      "name": "vca",
+      "type": "vca"
+    },
+    {
+      "name": "master",
+      "type": "master"
+    }
+  ],
   "knobs": {
     "atten": {
       "gain a": 0.15,

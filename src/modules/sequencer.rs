@@ -26,6 +26,7 @@ const fn step_param(name: &'static str) -> ParamInfo {
 }
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "seq",
     inputs: &[],
     outputs: &["cv", "gate"],
     params: &[

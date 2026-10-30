@@ -8,6 +8,9 @@ pub type Buffer = [f32; BLOCK];
 
 /// Static description of a module type: what can be patched and turned.
 pub struct ModuleInfo {
+    /// The kind of module, as patches name it, and the default name of its
+    /// instances.
+    pub name: &'static str,
     pub inputs: &'static [&'static str],
     pub outputs: &'static [&'static str],
     pub params: &'static [ParamInfo],

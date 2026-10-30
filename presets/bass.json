@@ -1,6 +1,60 @@
 {
-  "version": 1,
+  "version": 2,
   "description": "A plain sequenced bassline, a calm place to start patching from.",
+  "modules": [
+    {
+      "name": "seq",
+      "type": "seq"
+    },
+    {
+      "name": "lfo",
+      "type": "lfo"
+    },
+    {
+      "name": "noise",
+      "type": "noise"
+    },
+    {
+      "name": "s&h",
+      "type": "s&h"
+    },
+    {
+      "name": "atten",
+      "type": "atten"
+    },
+    {
+      "name": "osc 1",
+      "type": "osc"
+    },
+    {
+      "name": "osc 2",
+      "type": "osc"
+    },
+    {
+      "name": "filter",
+      "type": "filter"
+    },
+    {
+      "name": "dist",
+      "type": "dist"
+    },
+    {
+      "name": "crush",
+      "type": "crush"
+    },
+    {
+      "name": "delay",
+      "type": "delay"
+    },
+    {
+      "name": "vca",
+      "type": "vca"
+    },
+    {
+      "name": "master",
+      "type": "master"
+    }
+  ],
   "knobs": {
     "atten": {
       "gain a": 1.0,

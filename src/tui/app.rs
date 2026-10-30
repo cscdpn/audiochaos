@@ -189,10 +189,10 @@ impl App {
 mod tests {
     use super::*;
     use crate::engine::control::Engine;
-    use crate::rack;
+    use crate::presets;
 
     fn app() -> App {
-        let (graph, out) = rack::build(48_000.0, &rack::preset("bass").unwrap()).unwrap();
+        let (graph, out) = presets::get("bass").unwrap().build(48_000.0).unwrap();
         // The engine is dropped: commands pile up in the queue, which is
         // large enough for these tests.
         let (_, controller) = Engine::new(graph, out, 256);
@@ -209,7 +209,7 @@ mod tests {
     }
 
     #[test]
-    fn lists_every_knob_output_and_input_of_the_rack() {
+    fn lists_every_knob_output_and_input_of_the_patch() {
         let app = app();
         let nodes = app.controller.nodes();
         let total = |f: &dyn Fn(usize) -> usize| (0..nodes.len()).map(f).sum::<usize>();

@@ -9,6 +9,7 @@ pub const DRIVE: usize = 0;
 pub const FOLD: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "dist",
     inputs: &["in"],
     outputs: &["out"],
     params: &[

@@ -11,6 +11,7 @@ pub const OUT: usize = 0;
 pub const GAIN: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "vca",
     inputs: &["in", "mod"],
     outputs: &["out"],
     params: &[ParamInfo {

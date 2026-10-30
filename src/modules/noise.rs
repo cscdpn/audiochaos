@@ -3,6 +3,7 @@ use crate::engine::module::{Buffer, Module, ModuleInfo};
 pub const OUT: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "noise",
     inputs: &[],
     outputs: &["white"],
     params: &[],

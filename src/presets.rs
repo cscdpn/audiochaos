@@ -1,57 +1,25 @@
-//! The fixed set of modules the UI patches together, and the built-in presets
-//! it can start from.
+//! The built-in presets, compiled into the binary.
 
-use crate::engine::graph::{Graph, NodeId};
-use crate::modules::{
-    atten::Atten, crusher::Crusher, delay::Delay, distortion::Distortion, filter::Filter, lfo::Lfo,
-    master::Master, noise::Noise, oscillator::Oscillator, sample_hold::SampleHold,
-    sequencer::Sequencer, vca::Vca,
-};
-use crate::patch::{Patch, PatchError};
+use crate::patch::Patch;
 
-/// Built-in presets, in the same JSON format as saved patches. The first one
-/// is the default.
-const PRESETS: [(&str, &str); 2] = [
+/// In the same JSON format as saved patches. The first one is the default.
+const PRESETS: [(&str, &str); 3] = [
     ("chaos", include_str!("../presets/chaos.json")),
     ("bass", include_str!("../presets/bass.json")),
+    ("groovygroove", include_str!("../presets/groovygroove.json")),
 ];
 
-pub fn preset_names() -> impl Iterator<Item = &'static str> {
+pub fn names() -> impl Iterator<Item = &'static str> {
     PRESETS.iter().map(|(name, _)| *name)
 }
 
-pub fn default_preset() -> Patch {
-    preset(PRESETS[0].0).expect("the default preset exists")
+pub fn default() -> Patch {
+    get(PRESETS[0].0).expect("the default preset exists")
 }
 
-pub fn preset(name: &str) -> Option<Patch> {
+pub fn get(name: &str) -> Option<Patch> {
     let (_, json) = PRESETS.iter().find(|(n, _)| *n == name)?;
     Some(Patch::from_json(json).expect("built-in presets are valid"))
-}
-
-/// Builds the rack, sets it up with `patch`, and returns it with the node that
-/// feeds the speakers.
-///
-/// Modules are ordered from sources to the master: a cable going backwards in
-/// this order is a feedback cable and costs one block of delay.
-pub fn build(sample_rate: f32, patch: &Patch) -> Result<(Graph, NodeId), PatchError> {
-    let sr = sample_rate;
-    let mut g = Graph::new(sr);
-    g.add("seq", Box::new(Sequencer::new(sr)));
-    g.add("lfo", Box::new(Lfo::new(sr)));
-    g.add("noise", Box::new(Noise::new(0x5eed)));
-    g.add("s&h", Box::new(SampleHold::new()));
-    g.add("atten", Box::new(Atten));
-    g.add("osc 1", Box::new(Oscillator::new(sr)));
-    g.add("osc 2", Box::new(Oscillator::new(sr)));
-    g.add("filter", Box::new(Filter::new(sr)));
-    g.add("dist", Box::new(Distortion));
-    g.add("crush", Box::new(Crusher::new()));
-    g.add("delay", Box::new(Delay::new(sr)));
-    g.add("vca", Box::new(Vca));
-    let master = g.add("master", Box::new(Master));
-    patch.apply_to_graph(&mut g)?;
-    Ok((g, master))
 }
 
 #[cfg(test)]
@@ -63,7 +31,7 @@ mod tests {
     const SR: f32 = 48_000.0;
 
     fn render(preset_name: &str, seconds: usize) -> Vec<f32> {
-        let (mut g, out) = build(SR, &preset(preset_name).unwrap()).unwrap();
+        let (mut g, out) = get(preset_name).unwrap().build(SR).unwrap();
         g.render(out, master::OUT, seconds * SR as usize)
     }
 
@@ -80,15 +48,16 @@ mod tests {
 
     #[test]
     fn every_preset_loads_and_round_trips() {
-        for name in preset_names() {
-            let patch = preset(name).unwrap();
-            let (g, _) = build(SR, &patch).unwrap();
+        for name in names() {
+            let patch = get(name).unwrap();
+            let (g, _) = patch.build(SR).unwrap();
             let mut saved = Patch::from_graph(&g);
             saved.description = patch.description.clone();
+            saved.positions = patch.positions.clone();
             assert_eq!(saved, patch, "{name}");
         }
-        assert_eq!(preset("nope"), None);
-        assert_eq!(default_preset(), preset("chaos").unwrap());
+        assert_eq!(get("nope"), None);
+        assert_eq!(default(), get("chaos").unwrap());
     }
 
     #[test]

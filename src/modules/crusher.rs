@@ -9,6 +9,7 @@ pub const BITS: usize = 0;
 pub const DOWNSAMPLE: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "crush",
     inputs: &["in"],
     outputs: &["out"],
     params: &[

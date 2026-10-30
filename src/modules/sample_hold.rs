@@ -6,6 +6,7 @@ pub const IN_TRIGGER: usize = 1;
 pub const OUT: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "s&h",
     inputs: &["in", "trigger"],
     outputs: &["out"],
     params: &[],

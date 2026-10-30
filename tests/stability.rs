@@ -1,10 +1,11 @@
 //! Chaotic patches must never send anything but finite, bounded samples to
 //! the speakers, and must never leave a module stuck on non-finite state.
 
+use audiochaos::engine::control::Engine;
 use audiochaos::engine::graph::{Cable, Graph, NodeId};
 use audiochaos::engine::module::BLOCK;
-use audiochaos::modules::master;
-use audiochaos::rack;
+use audiochaos::modules::{self, master};
+use audiochaos::{patch, presets};
 
 const SR: f32 = 48_000.0;
 
@@ -48,7 +49,7 @@ fn random_cable(g: &Graph, nodes: &[NodeId], rng: &mut Rng) -> Option<Cable> {
 /// resonance, feedback, drive and FM depth often end up maxed out).
 fn random_patch(seed: u64) -> (Graph, NodeId) {
     let mut rng = Rng(seed);
-    let (mut g, out) = rack::build(SR, &rack::default_preset()).unwrap();
+    let (mut g, out) = presets::default().build(SR).unwrap();
     let nodes: Vec<NodeId> = g.nodes().collect();
     for _ in 0..40 {
         if let Some(cable) = random_cable(&g, &nodes, &mut rng) {
@@ -86,7 +87,7 @@ fn random_patches_stay_finite_and_bounded() {
 
 #[test]
 fn self_feeding_loops_through_every_processor_stay_finite() {
-    let (mut g, out) = rack::build(SR, &rack::default_preset()).unwrap();
+    let (mut g, out) = presets::default().build(SR).unwrap();
     let nodes: Vec<NodeId> = g.nodes().collect();
     // Every module's first output into every input of itself and of the next
     // module: the densest feedback the rack allows without random choice.
@@ -115,4 +116,57 @@ fn self_feeding_loops_through_every_processor_stay_finite() {
     for &node in &nodes {
         assert!(g.outputs(node).iter().flatten().all(|s| s.is_finite()));
     }
+}
+
+/// Adds, removes and patches modules at random while the engine plays, the
+/// way someone hammering the editor would, and checks the sound stays finite
+/// and bounded and the controller's mirror stays a valid patch.
+#[test]
+fn editing_the_patch_while_it_plays_stays_consistent() {
+    let mut rng = Rng(7);
+    let (graph, out) = presets::default().build(SR).unwrap();
+    let (mut engine, mut controller) = Engine::new(graph, out, 1024);
+    for _ in 0..2_000 {
+        match rng.below(4) {
+            0 => {
+                let kinds: Vec<_> = modules::KINDS
+                    .iter()
+                    .filter(|k| k.name != master::INFO.name)
+                    .collect();
+                let kind = kinds[rng.below(kinds.len())].name;
+                // Refused once the patch is full, which is fine here.
+                let _ = patch::add_module(&mut controller, kind);
+            }
+            1 => {
+                let nodes = controller.nodes();
+                let id = nodes[rng.below(nodes.len())].id;
+                if id != controller.output() {
+                    controller.remove(id).unwrap();
+                }
+            }
+            _ => {
+                let nodes = controller.nodes();
+                let (from, to) = (
+                    &nodes[rng.below(nodes.len())],
+                    &nodes[rng.below(nodes.len())],
+                );
+                if !from.info.outputs.is_empty() && to.info.num_input_ports() > 0 {
+                    let cable = Cable {
+                        from: from.id,
+                        from_port: rng.below(from.info.outputs.len()),
+                        to: to.id,
+                        to_port: rng.below(to.info.num_input_ports()),
+                    };
+                    let _ = controller.toggle_cable(cable);
+                }
+            }
+        }
+        for _ in 0..rng.below(3) * BLOCK {
+            let sample = engine.next_sample();
+            assert!(sample.is_finite() && sample.abs() <= 1.0);
+        }
+    }
+    let saved = patch::Patch::from_controller(&controller);
+    let (rebuilt, _) = saved.build(SR).expect("the mirror is a valid patch");
+    assert_eq!(patch::Patch::from_graph(&rebuilt), saved);
 }

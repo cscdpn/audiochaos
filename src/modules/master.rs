@@ -8,6 +8,7 @@ pub const OUT: usize = 0;
 pub const VOLUME: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "master",
     inputs: &["in"],
     outputs: &["out"],
     params: &[ParamInfo {

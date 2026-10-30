@@ -14,7 +14,7 @@ use crate::engine::audio::Playback;
 use crate::engine::control::Controller;
 use crate::engine::record::{self, Recorder};
 use crate::patch::Patch;
-use crate::rack;
+use crate::presets;
 use editor::Editor;
 
 /// How often the window refreshes without input, to keep the audio error
@@ -73,9 +73,9 @@ impl eframe::App for GuiApp {
 impl GuiApp {
     fn patch_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Presets", |ui| {
-            for name in rack::preset_names() {
+            for name in presets::names() {
                 if ui.button(name).clicked() {
-                    let patch = rack::preset(name).expect("listed presets exist");
+                    let patch = presets::get(name).expect("listed presets exist");
                     self.load(&patch, name);
                 }
             }

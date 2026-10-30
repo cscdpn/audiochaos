@@ -16,6 +16,7 @@ pub const FREQ: usize = 0;
 pub const FM_DEPTH: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
+    name: "osc",
     inputs: &["fm"],
     outputs: &["sine", "saw", "square"],
     params: &[

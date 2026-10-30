@@ -7,7 +7,7 @@ use audiochaos::engine::control::Engine;
 use audiochaos::engine::{audio, record};
 use audiochaos::patch::Patch;
 use audiochaos::tui::{self, App};
-use audiochaos::{gui, rack};
+use audiochaos::{gui, presets};
 
 const USAGE: &str = "usage: audiochaos [--tui] [preset | patch.json]
        audiochaos --render out.wav [--seconds N] [preset | patch.json]
@@ -90,19 +90,19 @@ fn run() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
     let patch = match &args.patch {
-        None => rack::default_preset(),
+        None => presets::default(),
         Some(arg) => load_patch(arg)?,
     };
     if let Some(path) = &args.render {
         let seconds = args.seconds.unwrap_or(DEFAULT_RENDER_SECONDS);
-        let (mut graph, output) = rack::build(RENDER_SAMPLE_RATE, &patch)?;
+        let (mut graph, output) = patch.build(RENDER_SAMPLE_RATE)?;
         record::render(&mut graph, output, seconds, path)
             .map_err(|e| format!("cannot render to {}: {e}", path.display()))?;
         println!("wrote {seconds} s to {}", path.display());
         return Ok(());
     }
     let (device, config) = audio::default_output()?;
-    let (graph, output) = rack::build(config.sample_rate as f32, &patch)?;
+    let (graph, output) = patch.build(config.sample_rate as f32)?;
     let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
     let (tap, recorder) = record::tap(config.sample_rate);
     let playback = audio::play(&device, config, engine, tap)?;
@@ -116,13 +116,13 @@ fn run() -> Result<(), Box<dyn Error>> {
 
 /// A built-in preset name, or else a path to a patch file.
 fn load_patch(arg: &str) -> Result<Patch, Box<dyn Error>> {
-    if let Some(patch) = rack::preset(arg) {
+    if let Some(patch) = presets::get(arg) {
         return Ok(patch);
     }
     match fs::read_to_string(arg) {
         Ok(json) => Ok(Patch::from_json(&json)?),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            let names: Vec<_> = rack::preset_names().collect();
+            let names: Vec<_> = presets::names().collect();
             Err(format!(
                 "no preset or file named {arg:?} (presets: {})",
                 names.join(", ")
