@@ -205,5 +205,9 @@ wrappers around the usual `cargo` commands in the `justfile`.
 Dev builds use `opt-level = 1`: unoptimized DSP made the stability tests
 slow and risked audio dropouts.
 
+A USB controller plugged in at boot can become ALSA's card 0, the system
+default, although it has no audio output. The first sound card that opens then
+takes over, after a few harmless `ALSA lib` lines on the terminal.
+
 The header shows an audio error count. One error at startup is normal with
 the ALSA backend; a count that keeps rising means buffer underruns.
