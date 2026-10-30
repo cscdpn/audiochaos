@@ -186,6 +186,7 @@ fn bar(normalized: f32) -> String {
 mod tests {
     use super::*;
     use crate::engine::control::Engine;
+    use crate::modules::Context;
     use crate::presets;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -217,7 +218,10 @@ mod tests {
 
     #[test]
     fn both_screens_render_the_patch() {
-        let (graph, out) = presets::get("bass").unwrap().build(48_000.0).unwrap();
+        let (graph, out) = presets::get("bass")
+            .unwrap()
+            .build(&Context::new(48_000.0))
+            .unwrap();
         let (_, controller) = Engine::new(graph, out, 16);
         let mut app = App::new(controller);
 

@@ -8,16 +8,39 @@ pub mod distortion;
 pub mod filter;
 pub mod lfo;
 pub mod master;
+pub mod midi;
 pub mod noise;
 pub mod oscillator;
 pub mod sample_hold;
 pub mod sequencer;
 pub mod vca;
 
+use std::sync::Arc;
+
 use crate::engine::module::{Module, ModuleInfo};
+use crate::midi::State;
+
+/// What building a module takes besides its kind.
+#[derive(Clone)]
+pub struct Context {
+    pub sample_rate: f32,
+    /// What the MIDI controllers play; `midi` modules read it.
+    pub midi: Arc<State>,
+}
+
+impl Context {
+    /// With no MIDI controller playing.
+    pub fn new(sample_rate: f32) -> Self {
+        Self {
+            sample_rate,
+            midi: Arc::default(),
+        }
+    }
+}
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 12] = [
+pub const KINDS: [&ModuleInfo; 13] = [
+    &midi::INFO,
     &sequencer::INFO,
     &lfo::INFO,
     &noise::INFO,
@@ -34,9 +57,10 @@ pub const KINDS: [&ModuleInfo; 12] = [
 
 /// A new module of the given kind, or `None` if no kind has that name.
 /// `seed` makes each noise source different, yet reproducible.
-pub fn build(kind: &str, sample_rate: f32, seed: u32) -> Option<Box<dyn Module>> {
-    let sr = sample_rate;
+pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>> {
+    let sr = context.sample_rate;
     let module: Box<dyn Module> = match kind {
+        "midi" => Box::new(midi::Midi::new(Arc::clone(&context.midi), sr)),
         "seq" => Box::new(sequencer::Sequencer::new(sr)),
         "lfo" => Box::new(lfo::Lfo::new(sr)),
         "noise" => Box::new(noise::Noise::new(seed)),
@@ -61,10 +85,10 @@ mod tests {
     #[test]
     fn every_kind_builds_a_module_of_that_kind() {
         for info in KINDS {
-            let module = build(info.name, 48_000.0, 1).unwrap();
+            let module = build(info.name, &Context::new(48_000.0), 1).unwrap();
             assert_eq!(module.info().name, info.name);
         }
-        assert!(build("theremin", 48_000.0, 1).is_none());
+        assert!(build("theremin", &Context::new(48_000.0), 1).is_none());
     }
 }
 

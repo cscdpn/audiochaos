@@ -3,10 +3,11 @@
 use crate::patch::Patch;
 
 /// In the same JSON format as saved patches. The first one is the default.
-const PRESETS: [(&str, &str); 3] = [
+const PRESETS: [(&str, &str); 4] = [
     ("chaos", include_str!("../presets/chaos.json")),
     ("bass", include_str!("../presets/bass.json")),
     ("groovygroove", include_str!("../presets/groovygroove.json")),
+    ("keys", include_str!("../presets/keys.json")),
 ];
 
 pub fn names() -> impl Iterator<Item = &'static str> {
@@ -25,13 +26,14 @@ pub fn get(name: &str) -> Option<Patch> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::Context;
     use crate::modules::master;
     use crate::modules::test_util::{rising_zero_crossings, rms};
 
     const SR: f32 = 48_000.0;
 
     fn render(preset_name: &str, seconds: usize) -> Vec<f32> {
-        let (mut g, out) = get(preset_name).unwrap().build(SR).unwrap();
+        let (mut g, out) = get(preset_name).unwrap().build(&Context::new(SR)).unwrap();
         g.render(out, master::OUT, seconds * SR as usize)
     }
 
@@ -50,7 +52,7 @@ mod tests {
     fn every_preset_loads_and_round_trips() {
         for name in names() {
             let patch = get(name).unwrap();
-            let (g, _) = patch.build(SR).unwrap();
+            let (g, _) = patch.build(&Context::new(SR)).unwrap();
             let mut saved = Patch::from_graph(&g);
             saved.description = patch.description.clone();
             saved.positions = patch.positions.clone();
@@ -58,6 +60,24 @@ mod tests {
         }
         assert_eq!(get("nope"), None);
         assert_eq!(default(), get("chaos").unwrap());
+    }
+
+    #[test]
+    fn keys_play_from_the_controller_and_rest_silent() {
+        use crate::midi::Parser;
+        let context = Context::new(SR);
+        let (mut g, out) = get("keys").unwrap().build(&context).unwrap();
+        assert!(rms(&g.render(out, master::OUT, SR as usize)) < 1e-3);
+        let mut parser = Parser::default();
+        parser.handle(&[0x90, 60, 100], &context.midi);
+        let played = rms(&g.render(out, master::OUT, SR as usize));
+        assert!(played > 0.05, "keys {played}");
+        parser.handle(&[0x80, 60, 0], &context.midi);
+        parser.handle(&[0x99, 36, 100], &context.midi);
+        assert!(
+            rms(&g.render(out, master::OUT, SR as usize)) > 0.05,
+            "pad 1"
+        );
     }
 
     #[test]

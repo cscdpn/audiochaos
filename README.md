@@ -10,7 +10,8 @@ in a graphical node editor or a terminal UI.
 oscillators frequency-modulating each other, folded, crushed and fed back
 through the delay, with random voltages retuning them. `just run bass`
 starts on a plain sequenced bassline instead, a calm base to patch from, and
-`just run groovygroove` on a groovier one.
+`just run groovygroove` on a groovier one. `just run keys` is played from a
+MIDI controller (see [MIDI controllers](#midi-controllers)).
 
 ### Graphical editor
 
@@ -65,6 +66,29 @@ Files are mono 16-bit WAV, which plays anywhere; the master never leaves
 -1..1, so 16 bits lose nothing audible. Neither way overwrites an existing
 file.
 
+### MIDI controllers
+
+Every MIDI controller plugged in at startup plays the `midi` modules; the
+status bar names the ones found. `just run keys` is a ready-made patch:
+keys play a filtered saw, knobs 1 to 4 sweep the cutoff, resonance, delay
+feedback and self-FM, and pad 1 fires a noise burst.
+
+A `midi` module outputs:
+
+- `pitch`, `gate`, `velocity`: the keyboard, one note at a time; releasing a
+  key falls back to the one still held. Patched into an oscillator's
+  `freq cv`, `pitch` plays in tune, the `freq` knob setting the pitch of
+  middle C. Pitch bend adds up to two semitones either way.
+- `pad 1` to `pad 8`: a gate per pad, from notes on channel 10, the usual
+  channel for pads. Pads start at note 36, and further banks land on the
+  same eight outputs.
+- `knob 1` to `knob 8`: controllers 1 to 8, from 0 to 1, smoothed.
+
+These are the defaults of most small controllers, the Akai MPK mini among
+them. `cargo run -- --midi-monitor` prints what a controller actually sends,
+to check. On Linux, MIDI needs the ALSA sequencer: if the status bar says
+"no MIDI", load it with `sudo modprobe snd-seq`.
+
 ### Patches
 
 A patch is a JSON file listing its modules, knob values and cables, with
@@ -97,6 +121,7 @@ Module types, as patches and the editor's palette name them:
 
 | Type | Does |
 |---|---|
+| midi | a MIDI controller's keyboard, pads and knobs as voltages |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
 | noise | white noise |
@@ -135,6 +160,9 @@ patch noise through `s&h` into a `freq cv`.
   mirror of the patch for display. Both front ends are clients of that same
   `Controller`; in the editor, a wire is drawn only once the controller has
   accepted the cable.
+- MIDI input follows it too: midir's threads decode messages into atomics
+  that `midi` modules read once per block, so a burst of knob turns never
+  stalls the audio.
 - Live recording follows the same rule: the audio thread copies samples into
   a second lock-free queue, and a writer thread empties it to disk. The queue
   holds a second of audio; if the disk stalls longer, samples are dropped and
@@ -164,6 +192,7 @@ just run          # chaos preset
 just run bass     # bass preset
 just run my.json  # a patch file
 just run --render out.wav --seconds 60   # render to WAV, no sound card
+just run --midi-monitor                  # what the MIDI controllers send
 just tui          # terminal UI instead of the editor
 just test
 just lint   # cargo fmt --check + clippy

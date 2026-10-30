@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "description": "Play it from a MIDI keyboard: keys play a filtered saw, knobs 1-4 sweep cutoff, resonance, delay feedback and self-FM, pad 1 fires a noise burst.",
+  "modules": [
+    { "name": "midi", "type": "midi" },
+    { "name": "osc", "type": "osc" },
+    { "name": "filter", "type": "filter" },
+    { "name": "vca", "type": "vca" },
+    { "name": "noise", "type": "noise" },
+    { "name": "hits", "type": "vca" },
+    { "name": "delay", "type": "delay" },
+    { "name": "master", "type": "master" }
+  ],
+  "knobs": {
+    "osc": { "freq": 261.63, "fm depth": 1.0 },
+    "filter": { "cutoff": 600.0, "resonance": 0.2 },
+    "vca": { "gain": 0.0 },
+    "hits": { "gain": 0.0 },
+    "delay": { "time": 0.25, "feedback": 0.3, "mix": 0.3 },
+    "master": { "volume": 0.5 }
+  },
+  "cables": [
+    { "from": "midi", "output": "pitch", "to": "osc", "input": "freq cv" },
+    { "from": "osc", "output": "square", "to": "osc", "input": "fm" },
+    { "from": "midi", "output": "knob 4", "to": "osc", "input": "fm depth cv" },
+    { "from": "osc", "output": "saw", "to": "filter", "input": "in" },
+    { "from": "midi", "output": "knob 1", "to": "filter", "input": "cutoff cv" },
+    { "from": "midi", "output": "knob 2", "to": "filter", "input": "resonance cv" },
+    { "from": "filter", "output": "lowpass", "to": "vca", "input": "in" },
+    { "from": "midi", "output": "gate", "to": "vca", "input": "mod" },
+    { "from": "noise", "output": "white", "to": "hits", "input": "in" },
+    { "from": "midi", "output": "pad 1", "to": "hits", "input": "mod" },
+    { "from": "vca", "output": "out", "to": "delay", "input": "in" },
+    { "from": "hits", "output": "out", "to": "delay", "input": "in" },
+    { "from": "midi", "output": "knob 3", "to": "delay", "input": "feedback cv" },
+    { "from": "delay", "output": "out", "to": "master", "input": "in" }
+  ]
+}

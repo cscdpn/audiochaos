@@ -79,10 +79,6 @@ pub struct Controller {
 }
 
 impl Controller {
-    pub fn sample_rate(&self) -> f32 {
-        self.sample_rate
-    }
-
     /// The module feeding the speakers.
     pub fn output(&self) -> NodeId {
         self.output

@@ -189,10 +189,14 @@ impl App {
 mod tests {
     use super::*;
     use crate::engine::control::Engine;
+    use crate::modules::Context;
     use crate::presets;
 
     fn app() -> App {
-        let (graph, out) = presets::get("bass").unwrap().build(48_000.0).unwrap();
+        let (graph, out) = presets::get("bass")
+            .unwrap()
+            .build(&Context::new(48_000.0))
+            .unwrap();
         // The engine is dropped: commands pile up in the queue, which is
         // large enough for these tests.
         let (_, controller) = Engine::new(graph, out, 256);

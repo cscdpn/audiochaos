@@ -13,6 +13,7 @@ use eframe::egui;
 use crate::engine::audio::Playback;
 use crate::engine::control::Controller;
 use crate::engine::record::{self, Recorder};
+use crate::modules::Context;
 use crate::patch::Patch;
 use crate::presets;
 use editor::Editor;
@@ -22,15 +23,20 @@ use editor::Editor;
 const REFRESH: Duration = Duration::from_millis(250);
 
 /// Runs until the window is closed. `patch` is the one already playing; only
-/// its block positions are read. Recordings go to the current directory.
+/// its block positions are read. `status` is the first message shown.
+/// Recordings go to the current directory.
 pub fn run(
     controller: Controller,
+    context: Context,
     patch: &Patch,
     playback: Playback,
     recorder: Recorder,
+    status: String,
 ) -> Result<(), Box<dyn Error>> {
+    let mut editor = Editor::new(controller, context, &patch.positions);
+    editor.status = status;
     let app = GuiApp {
-        editor: Editor::new(controller, &patch.positions),
+        editor,
         playback,
         recorder,
     };

@@ -5,18 +5,23 @@ use std::{env, fs, io};
 
 use audiochaos::engine::control::Engine;
 use audiochaos::engine::{audio, record};
+use audiochaos::midi;
+use audiochaos::modules::Context;
 use audiochaos::patch::Patch;
 use audiochaos::tui::{self, App};
 use audiochaos::{gui, presets};
 
 const USAGE: &str = "usage: audiochaos [--tui] [preset | patch.json]
        audiochaos --render out.wav [--seconds N] [preset | patch.json]
+       audiochaos --midi-monitor
 
 Starts the graphical editor, or the terminal UI with --tui, on the given
 built-in preset or patch file (default: the first preset).
 
 --render writes N seconds (default 30) of the patch to a WAV file instead,
-without opening the sound card.";
+without opening the sound card.
+
+--midi-monitor prints what the connected MIDI controllers send.";
 
 const DEFAULT_RENDER_SECONDS: f32 = 30.0;
 /// The sound card's rate is unknown, and irrelevant, when rendering offline.
@@ -44,6 +49,7 @@ struct Args {
     patch: Option<String>,
     render: Option<PathBuf>,
     seconds: Option<f32>,
+    midi_monitor: bool,
 }
 
 /// `None` when help was asked for.
@@ -53,6 +59,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
         patch: None,
         render: None,
         seconds: None,
+        midi_monitor: false,
     };
     while let Some(arg) = args.next() {
         let mut value = || {
@@ -62,6 +69,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
         match arg.as_str() {
             "-h" | "--help" => return Ok(None),
             "--tui" => parsed.tui = true,
+            "--midi-monitor" => parsed.midi_monitor = true,
             "--render" => parsed.render = Some(value()?.into()),
             "--seconds" => {
                 let seconds = value()?;
@@ -78,6 +86,10 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
     if parsed.render.is_some() && parsed.tui {
         return Err(format!("--render and --tui do not go together\n{USAGE}"));
     }
+    let others = parsed.tui || parsed.patch.is_some() || parsed.render.is_some();
+    if parsed.midi_monitor && others {
+        return Err(format!("--midi-monitor goes alone\n{USAGE}"));
+    }
     if parsed.seconds.is_some() && parsed.render.is_none() {
         return Err(format!("--seconds only goes with --render\n{USAGE}"));
     }
@@ -89,27 +101,42 @@ fn run() -> Result<(), Box<dyn Error>> {
         println!("{USAGE}");
         return Ok(());
     };
+    if args.midi_monitor {
+        return midi::monitor();
+    }
     let patch = match &args.patch {
         None => presets::default(),
         Some(arg) => load_patch(arg)?,
     };
     if let Some(path) = &args.render {
         let seconds = args.seconds.unwrap_or(DEFAULT_RENDER_SECONDS);
-        let (mut graph, output) = patch.build(RENDER_SAMPLE_RATE)?;
+        let (mut graph, output) = patch.build(&Context::new(RENDER_SAMPLE_RATE))?;
         record::render(&mut graph, output, seconds, path)
             .map_err(|e| format!("cannot render to {}: {e}", path.display()))?;
         println!("wrote {seconds} s to {}", path.display());
         return Ok(());
     }
     let (device, config) = audio::default_output()?;
-    let (graph, output) = patch.build(config.sample_rate as f32)?;
+    let context = Context::new(config.sample_rate as f32);
+    // A missing MIDI setup is no reason not to play.
+    let (_midi_inputs, status) = match midi::connect(&context.midi) {
+        Ok(inputs) if inputs.names.is_empty() => (Some(inputs), "no MIDI controller".to_string()),
+        Ok(inputs) => {
+            let status = format!("MIDI: {}", inputs.names.join(", "));
+            (Some(inputs), status)
+        }
+        Err(e) => (None, format!("no MIDI: {e}")),
+    };
+    let (graph, output) = patch.build(&context)?;
     let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
     let (tap, recorder) = record::tap(config.sample_rate);
     let playback = audio::play(&device, config, engine, tap)?;
     if args.tui {
-        tui::run(App::new(controller), &playback, recorder)?;
+        let mut app = App::new(controller);
+        app.status = status;
+        tui::run(app, &playback, recorder)?;
     } else {
-        gui::run(controller, &patch, playback, recorder)?;
+        gui::run(controller, context, &patch, playback, recorder, status)?;
     }
     Ok(())
 }
@@ -188,5 +215,12 @@ mod tests {
         assert!(error(&["--render", "x.wav", "--seconds", "abc"]).starts_with("invalid duration"));
         assert!(error(&["--seconds", "3"]).starts_with("--seconds only goes with --render"));
         assert!(error(&["--render", "x.wav", "--tui"]).contains("do not go together"));
+    }
+
+    #[test]
+    fn midi_monitor_goes_alone() {
+        assert!(parse(&["--midi-monitor"]).unwrap().unwrap().midi_monitor);
+        let error = parse(&["--midi-monitor", "bass"]).unwrap_err();
+        assert!(error.starts_with("--midi-monitor goes alone"));
     }
 }

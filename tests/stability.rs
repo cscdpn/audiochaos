@@ -4,7 +4,7 @@
 use audiochaos::engine::control::Engine;
 use audiochaos::engine::graph::{Cable, Graph, NodeId};
 use audiochaos::engine::module::BLOCK;
-use audiochaos::modules::{self, master};
+use audiochaos::modules::{self, Context, master};
 use audiochaos::{patch, presets};
 
 const SR: f32 = 48_000.0;
@@ -49,7 +49,7 @@ fn random_cable(g: &Graph, nodes: &[NodeId], rng: &mut Rng) -> Option<Cable> {
 /// resonance, feedback, drive and FM depth often end up maxed out).
 fn random_patch(seed: u64) -> (Graph, NodeId) {
     let mut rng = Rng(seed);
-    let (mut g, out) = presets::default().build(SR).unwrap();
+    let (mut g, out) = presets::default().build(&Context::new(SR)).unwrap();
     let nodes: Vec<NodeId> = g.nodes().collect();
     for _ in 0..40 {
         if let Some(cable) = random_cable(&g, &nodes, &mut rng) {
@@ -87,7 +87,7 @@ fn random_patches_stay_finite_and_bounded() {
 
 #[test]
 fn self_feeding_loops_through_every_processor_stay_finite() {
-    let (mut g, out) = presets::default().build(SR).unwrap();
+    let (mut g, out) = presets::default().build(&Context::new(SR)).unwrap();
     let nodes: Vec<NodeId> = g.nodes().collect();
     // Every module's first output into every input of itself and of the next
     // module: the densest feedback the rack allows without random choice.
@@ -124,7 +124,8 @@ fn self_feeding_loops_through_every_processor_stay_finite() {
 #[test]
 fn editing_the_patch_while_it_plays_stays_consistent() {
     let mut rng = Rng(7);
-    let (graph, out) = presets::default().build(SR).unwrap();
+    let context = Context::new(SR);
+    let (graph, out) = presets::default().build(&context).unwrap();
     let (mut engine, mut controller) = Engine::new(graph, out, 1024);
     for _ in 0..2_000 {
         match rng.below(4) {
@@ -135,7 +136,7 @@ fn editing_the_patch_while_it_plays_stays_consistent() {
                     .collect();
                 let kind = kinds[rng.below(kinds.len())].name;
                 // Refused once the patch is full, which is fine here.
-                let _ = patch::add_module(&mut controller, kind);
+                let _ = patch::add_module(&mut controller, &context, kind);
             }
             1 => {
                 let nodes = controller.nodes();
@@ -167,6 +168,8 @@ fn editing_the_patch_while_it_plays_stays_consistent() {
         }
     }
     let saved = patch::Patch::from_controller(&controller);
-    let (rebuilt, _) = saved.build(SR).expect("the mirror is a valid patch");
+    let (rebuilt, _) = saved
+        .build(&Context::new(SR))
+        .expect("the mirror is a valid patch");
     assert_eq!(patch::Patch::from_graph(&rebuilt), saved);
 }

@@ -8,7 +8,7 @@ use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 use crate::engine::control::Controller;
 use crate::engine::graph::{Cable, NodeId};
 use crate::engine::param::Scale;
-use crate::modules::{self, master};
+use crate::modules::{self, Context, master};
 use crate::patch::{self, Patch};
 
 const AUDIO_PIN: Color32 = Color32::from_rgb(0xe0, 0x6c, 0x3c);
@@ -30,15 +30,22 @@ const BLOCK_GAP: f32 = 50.0;
 /// from the snarl only once the controller has accepted the change.
 pub struct Editor {
     pub(super) controller: Controller,
+    /// For building the modules of loaded patches and new blocks.
+    context: Context,
     /// Each block holds the id of its module.
     snarl: Snarl<NodeId>,
     pub(super) status: String,
 }
 
 impl Editor {
-    pub fn new(controller: Controller, positions: &BTreeMap<String, [f32; 2]>) -> Self {
+    pub fn new(
+        controller: Controller,
+        context: Context,
+        positions: &BTreeMap<String, [f32; 2]>,
+    ) -> Self {
         let mut editor = Self {
             controller,
+            context,
             snarl: Snarl::new(),
             status: String::new(),
         };
@@ -81,7 +88,7 @@ impl Editor {
 
     /// Replaces the playing patch, block positions included.
     pub fn load(&mut self, patch: &Patch) -> Result<(), Box<dyn Error>> {
-        patch.load_into(&mut self.controller)?;
+        patch.load_into(&mut self.controller, &self.context)?;
         self.rebuild(&patch.positions);
         Ok(())
     }
@@ -100,6 +107,7 @@ impl Editor {
     pub fn show_graph(&mut self, ui: &mut Ui) {
         let mut viewer = Viewer {
             controller: &mut self.controller,
+            context: &self.context,
             status: &mut self.status,
         };
         SnarlWidget::new()
@@ -154,6 +162,7 @@ fn default_layout(controller: &Controller) -> Vec<[f32; 2]> {
 /// Draws blocks for egui-snarl and turns edits into controller calls.
 struct Viewer<'a> {
     controller: &'a mut Controller,
+    context: &'a Context,
     status: &'a mut String,
 }
 
@@ -178,7 +187,7 @@ impl Viewer<'_> {
 
     /// Adds a module and its block at `pos`.
     fn add(&mut self, kind: &str, pos: Pos2, snarl: &mut Snarl<NodeId>) {
-        match patch::add_module(self.controller, kind) {
+        match patch::add_module(self.controller, self.context, kind) {
             Ok(id) => {
                 snarl.insert_node(pos, id);
                 *self.status = format!("added {}", self.controller.node(id).name);
@@ -348,11 +357,11 @@ mod tests {
 
     fn editor(preset: &str) -> Editor {
         let patch = presets::get(preset).unwrap();
-        let (graph, out) = patch.build(48_000.0).unwrap();
+        let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
         // Large enough for every command these tests send without an engine
         // draining the queue.
         let (_, controller) = Engine::new(graph, out, 1024);
-        Editor::new(controller, &patch.positions)
+        Editor::new(controller, Context::new(48_000.0), &patch.positions)
     }
 
     fn module(editor: &Editor, name: &str) -> NodeId {
@@ -386,6 +395,7 @@ mod tests {
     fn with_viewer(editor: &mut Editor, f: impl FnOnce(&mut Viewer, &mut Snarl<NodeId>)) {
         let mut viewer = Viewer {
             controller: &mut editor.controller,
+            context: &editor.context,
             status: &mut editor.status,
         };
         f(&mut viewer, &mut editor.snarl);

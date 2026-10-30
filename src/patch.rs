@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::engine::control::Controller;
 use crate::engine::graph::{Cable, CableSet, Graph, GraphError, MAX_MODULES, NodeId};
 use crate::engine::module::ModuleInfo;
-use crate::modules::{self, master};
+use crate::modules::{self, Context, master};
 
 /// Bumped on incompatible format changes, so old files fail loudly instead of
 /// loading wrong.
@@ -283,17 +283,17 @@ impl Patch {
 
     /// Builds the patch's graph, and returns it with the master, which feeds
     /// the speakers.
-    pub fn build(&self, sample_rate: f32) -> Result<(Graph, NodeId), PatchError> {
+    pub fn build(&self, context: &Context) -> Result<(Graph, NodeId), PatchError> {
         if self.modules.len() > MAX_MODULES {
             return Err(PatchError::TooManyModules);
         }
-        let mut graph = Graph::new(sample_rate);
+        let mut graph = Graph::new(context.sample_rate);
         let mut masters = Vec::new();
         for m in &self.modules {
             if graph.nodes().any(|id| graph.name(id) == m.name) {
                 return Err(PatchError::DuplicateModule(m.name.clone()));
             }
-            let module = modules::build(&m.kind, sample_rate, seed(&m.name)).ok_or_else(|| {
+            let module = modules::build(&m.kind, context, seed(&m.name)).ok_or_else(|| {
                 PatchError::UnknownType {
                     module: m.name.clone(),
                     kind: m.kind.clone(),
@@ -331,8 +331,12 @@ impl Patch {
     }
 
     /// Replaces the playing patch, modules included.
-    pub fn load_into(&self, controller: &mut Controller) -> Result<(), Box<dyn Error>> {
-        let (graph, output) = self.build(controller.sample_rate())?;
+    pub fn load_into(
+        &self,
+        controller: &mut Controller,
+        context: &Context,
+    ) -> Result<(), Box<dyn Error>> {
+        let (graph, output) = self.build(context)?;
         controller.replace(graph, output)?;
         Ok(())
     }
@@ -354,14 +358,17 @@ impl Patch {
 /// Adds a module of the given kind to the playing patch, named after its kind
 /// (`filter`, `filter 2`…) and set up exactly as loading it from a patch file
 /// would.
-pub fn add_module(controller: &mut Controller, kind: &str) -> Result<NodeId, Box<dyn Error>> {
+pub fn add_module(
+    controller: &mut Controller,
+    context: &Context,
+    kind: &str,
+) -> Result<NodeId, Box<dyn Error>> {
     let name = controller.free_name(kind);
-    let module = modules::build(kind, controller.sample_rate(), seed(&name)).ok_or_else(|| {
-        PatchError::UnknownType {
+    let module =
+        modules::build(kind, context, seed(&name)).ok_or_else(|| PatchError::UnknownType {
             module: name.clone(),
             kind: kind.to_string(),
-        }
-    })?;
+        })?;
     Ok(controller.add(name, module)?)
 }
 
@@ -458,7 +465,7 @@ mod tests {
 
     #[test]
     fn builds_the_modules_it_lists_and_finds_the_master() {
-        let (g, out) = patch(OSC_TO_MASTER).build(SR).unwrap();
+        let (g, out) = patch(OSC_TO_MASTER).build(&Context::new(SR)).unwrap();
         let names: Vec<_> = g.nodes().map(|n| g.name(n)).collect();
         assert_eq!(names, ["osc", "master"]);
         assert_eq!(g.name(out), "master");
@@ -468,7 +475,7 @@ mod tests {
 
     #[test]
     fn graph_round_trips_through_json() {
-        let (g, _) = patch(OSC_TO_MASTER).build(SR).unwrap();
+        let (g, _) = patch(OSC_TO_MASTER).build(&Context::new(SR)).unwrap();
         let saved = Patch::from_graph(&g);
         let reloaded = patch(&saved.to_json());
         assert_eq!(reloaded, saved);
@@ -480,12 +487,14 @@ mod tests {
     #[test]
     fn loading_replaces_modules_knobs_and_cables() {
         let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 64);
-        patch(OSC_TO_MASTER).load_into(&mut controller).unwrap();
+        patch(OSC_TO_MASTER)
+            .load_into(&mut controller, &Context::new(SR))
+            .unwrap();
         assert_eq!(controller.cables().len(), 2);
         assert_eq!(controller.nodes()[0].params[oscillator::FREQ], 440.0);
 
         let alone = patch(r#"{ "version": 2, "modules": [{ "name": "out", "type": "master" }] }"#);
-        alone.load_into(&mut controller).unwrap();
+        alone.load_into(&mut controller, &Context::new(SR)).unwrap();
         assert_eq!(controller.nodes().len(), 1);
         assert_eq!(controller.node(controller.output()).name, "out");
         assert_eq!(Patch::from_controller(&controller).modules, alone.modules);
@@ -500,22 +509,22 @@ mod tests {
         );
         assert_eq!(v1.version, VERSION);
         assert_eq!(v1.modules.len(), RACK_V1.len());
-        let (g, _) = v1.build(SR).unwrap();
+        let (g, _) = v1.build(&Context::new(SR)).unwrap();
         assert_eq!(g.cables().len(), 1);
     }
 
     #[test]
     fn added_modules_get_free_names_and_save_like_the_others() {
         let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 64);
-        let first = add_module(&mut controller, "noise").unwrap();
-        let second = add_module(&mut controller, "noise").unwrap();
+        let first = add_module(&mut controller, &Context::new(SR), "noise").unwrap();
+        let second = add_module(&mut controller, &Context::new(SR), "noise").unwrap();
         assert_eq!(controller.node(first).name, "noise");
         assert_eq!(controller.node(second).name, "noise 2");
         let saved = Patch::from_controller(&controller);
         assert_eq!(saved.modules[3].kind, "noise");
-        assert!(patch(&saved.to_json()).build(SR).is_ok());
+        assert!(patch(&saved.to_json()).build(&Context::new(SR)).is_ok());
 
-        let error = add_module(&mut controller, "theremin").unwrap_err();
+        let error = add_module(&mut controller, &Context::new(SR), "theremin").unwrap_err();
         assert_eq!(
             error.to_string(),
             r#"module "theremin" has unknown type "theremin""#
@@ -529,7 +538,7 @@ mod tests {
     }
 
     fn error(json: &str) -> String {
-        match Patch::from_json(json).and_then(|p| p.build(SR)) {
+        match Patch::from_json(json).and_then(|p| p.build(&Context::new(SR))) {
             Ok(_) => panic!("{json} should not build"),
             Err(e) => e.to_string(),
         }
