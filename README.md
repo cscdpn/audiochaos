@@ -80,14 +80,23 @@ A `midi` module outputs:
   `freq cv`, `pitch` plays in tune, the `freq` knob setting the pitch of
   middle C. Pitch bend adds up to two semitones either way.
 - `pad 1` to `pad 8`: a gate per pad, from notes on channel 10, the usual
-  channel for pads. Pads start at note 36, and further banks land on the
-  same eight outputs.
+  channel for pads, or from notes below 40 on any channel. Further banks land
+  on the same eight outputs.
 - `knob 1` to `knob 8`: controllers 1 to 8, from 0 to 1, smoothed.
 
-These are the defaults of most small controllers, the Akai MPK mini among
-them. `cargo run -- --midi-monitor` prints what a controller actually sends,
-to check. On Linux, MIDI needs the ALSA sequencer: if the status bar says
-"no MIDI", load it with `sudo modprobe snd-seq`.
+`cargo run -- --midi-monitor` prints what a controller actually sends. On the
+Akai MPK mini mk2, which sends everything on channel 1:
+
+- Pad bank B (notes 32 to 39) gives `pad 1` to `pad 8`: 36 to 39 are pads 1 to
+  4, 32 to 35 are pads 5 to 8.
+- Pad bank A (notes 44 to 51) sends the same messages as the keys, so it plays
+  the keyboard.
+- The joystick's vertical axis sends controller 1, like the first knob, so it
+  moves `knob 1` too. Its horizontal axis is the pitch bend.
+- Shifting the keys two octaves down or more makes the lowest keys act as pads.
+
+On Linux, MIDI needs the ALSA sequencer: if the status bar says "no MIDI",
+load it with `sudo modprobe snd-seq`.
 
 ### Patches
 

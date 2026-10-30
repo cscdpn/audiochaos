@@ -17,6 +17,11 @@ pub const KNOBS: usize = 8;
 /// Notes on channel 10 (9 counting from 0) come from pads: the General MIDI
 /// drum channel, the usual default of pad controllers.
 const PAD_CHANNEL: u8 = 9;
+/// Notes below this come from pads too, whatever their channel. The MPK mini
+/// mk2 sends everything on channel 1, with its keys from note 48 up (one
+/// octave down reaches 36) and its pad bank B on notes 32 to 39. Its bank A
+/// (44 to 51) sends the very same messages as keys, so it plays as keys.
+const LOWEST_KEY: u8 = 40;
 const FIRST_PAD_NOTE: u8 = 36;
 /// Knobs send these controller numbers, 1 to 8: the MPK mini's defaults.
 const FIRST_KNOB_CC: u8 = 1;
@@ -111,7 +116,7 @@ impl Parser {
     }
 
     fn note_on(&mut self, channel: u8, note: u8, velocity: u8, state: &State) {
-        if channel == PAD_CHANNEL {
+        if is_pad(channel, note) {
             state.pads[pad(note)].store(true, Ordering::Relaxed);
             return;
         }
@@ -123,7 +128,7 @@ impl Parser {
     }
 
     fn note_off(&mut self, channel: u8, note: u8, state: &State) {
-        if channel == PAD_CHANNEL {
+        if is_pad(channel, note) {
             state.pads[pad(note)].store(false, Ordering::Relaxed);
             return;
         }
@@ -133,6 +138,10 @@ impl Parser {
             None => state.gate.store(false, Ordering::Relaxed),
         }
     }
+}
+
+fn is_pad(channel: u8, note: u8) -> bool {
+    channel == PAD_CHANNEL || note < LOWEST_KEY
 }
 
 /// Pads usually start at note 36 (C1); each further bank of eight lands on
@@ -295,6 +304,26 @@ mod tests {
         assert!(!state.pad(1));
         // The second bank of eight lands on the same pads.
         assert!(play(&[[pad_on, 44, 100]]).pad(0));
+    }
+
+    /// As recorded from a real MPK mini mk2.
+    #[test]
+    fn mpk_mini_mk2_bank_b_pads_are_pads_on_channel_1() {
+        for (note, pad) in [(36, 0), (39, 3), (32, 4), (35, 7)] {
+            let state = play(&[[ON, note, 75]]);
+            assert!(state.pad(pad), "note {note}");
+            assert!(!state.gate(), "note {note} played the keyboard");
+            assert!(!play(&[[ON, note, 75], [OFF, note, 0]]).pad(pad));
+        }
+    }
+
+    #[test]
+    fn mpk_mini_mk2_keys_and_bank_a_play_the_keyboard() {
+        for note in [48, 72, 44, 51] {
+            let state = play(&[[ON, note, 70]]);
+            assert!(state.gate(), "note {note}");
+            assert_eq!(state.note(), note);
+        }
     }
 
     #[test]
