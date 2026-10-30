@@ -309,7 +309,7 @@ impl Patch {
         };
         let resolved = self.resolve(&graph_modules(&graph))?;
         for (node, param, value) in resolved.knobs {
-            graph.set_param(node, param, value);
+            graph.init_param(node, param, value);
         }
         for cable in resolved.cables {
             graph.connect(cable).map_err(PatchError::Graph)?;

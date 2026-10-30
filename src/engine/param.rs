@@ -88,6 +88,12 @@ impl Smoothed {
         self.target = target;
     }
 
+    /// Goes straight to `value`, without gliding.
+    pub fn jump(&mut self, value: f32) {
+        self.value = value;
+        self.target = value;
+    }
+
     /// Advances by one sample and returns the new value.
     pub fn tick(&mut self) -> f32 {
         let gap = self.target - self.value;

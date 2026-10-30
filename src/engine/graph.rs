@@ -240,6 +240,15 @@ impl Graph {
         node.knobs[param].set(info.to_normalized(value));
     }
 
+    /// Sets a knob at once, without the glide: for setting up a graph before
+    /// it plays, so it starts exactly as set.
+    pub fn init_param(&mut self, node: NodeId, param: usize, value: f32) {
+        self.set_param(node, param, value);
+        let node = self.node_mut(node);
+        let target = node.module.info().params[param].to_normalized(value);
+        node.knobs[param].jump(target);
+    }
+
     /// The value the knob is set to (not the modulated value).
     pub fn param(&self, node: NodeId, param: usize) -> f32 {
         self.node(node).settings[param]
@@ -459,6 +468,15 @@ mod tests {
         let out = g.render(a, 0, 4800);
         assert!(out[0] < 2.0);
         assert!(close(out[4799], 5.0));
+    }
+
+    #[test]
+    fn initial_knob_values_apply_without_gliding() {
+        let mut g = Graph::new(SR);
+        let a = g.add("a", Box::new(Offset));
+        g.init_param(a, 0, 5.0);
+        assert_eq!(g.param(a, 0), 5.0);
+        assert!(close(g.render(a, 0, 1)[0], 5.0));
     }
 
     #[test]
