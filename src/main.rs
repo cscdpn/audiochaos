@@ -1,17 +1,26 @@
 use std::error::Error;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::{env, fs, io};
 
-use audiochaos::engine::audio;
 use audiochaos::engine::control::Engine;
+use audiochaos::engine::{audio, record};
 use audiochaos::patch::Patch;
 use audiochaos::tui::{self, App};
 use audiochaos::{gui, rack};
 
 const USAGE: &str = "usage: audiochaos [--tui] [preset | patch.json]
+       audiochaos --render out.wav [--seconds N] [preset | patch.json]
 
 Starts the graphical editor, or the terminal UI with --tui, on the given
-built-in preset or patch file (default: the first preset).";
+built-in preset or patch file (default: the first preset).
+
+--render writes N seconds (default 30) of the patch to a WAV file instead,
+without opening the sound card.";
+
+const DEFAULT_RENDER_SECONDS: f32 = 30.0;
+/// The sound card's rate is unknown, and irrelevant, when rendering offline.
+const RENDER_SAMPLE_RATE: f32 = 48_000.0;
 
 /// Room for a burst of key presses, or a whole patch being loaded, even if
 /// the audio thread stalls briefly.
@@ -33,22 +42,44 @@ fn main() -> ExitCode {
 struct Args {
     tui: bool,
     patch: Option<String>,
+    render: Option<PathBuf>,
+    seconds: Option<f32>,
 }
 
 /// `None` when help was asked for.
-fn parse_args(args: impl Iterator<Item = String>) -> Result<Option<Args>, String> {
+fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, String> {
     let mut parsed = Args {
         tui: false,
         patch: None,
+        render: None,
+        seconds: None,
     };
-    for arg in args {
+    while let Some(arg) = args.next() {
+        let mut value = || {
+            args.next()
+                .ok_or_else(|| format!("{arg} needs a value\n{USAGE}"))
+        };
         match arg.as_str() {
             "-h" | "--help" => return Ok(None),
             "--tui" => parsed.tui = true,
+            "--render" => parsed.render = Some(value()?.into()),
+            "--seconds" => {
+                let seconds = value()?;
+                match seconds.parse::<f32>() {
+                    Ok(s) if s > 0.0 && s.is_finite() => parsed.seconds = Some(s),
+                    _ => return Err(format!("invalid duration {seconds:?}\n{USAGE}")),
+                }
+            }
             _ if arg.starts_with('-') => return Err(format!("unknown option {arg}\n{USAGE}")),
             _ if parsed.patch.is_some() => return Err(format!("too many arguments\n{USAGE}")),
             _ => parsed.patch = Some(arg),
         }
+    }
+    if parsed.render.is_some() && parsed.tui {
+        return Err(format!("--render and --tui do not go together\n{USAGE}"));
+    }
+    if parsed.seconds.is_some() && parsed.render.is_none() {
+        return Err(format!("--seconds only goes with --render\n{USAGE}"));
     }
     Ok(Some(parsed))
 }
@@ -62,14 +93,23 @@ fn run() -> Result<(), Box<dyn Error>> {
         None => rack::default_preset(),
         Some(arg) => load_patch(arg)?,
     };
+    if let Some(path) = &args.render {
+        let seconds = args.seconds.unwrap_or(DEFAULT_RENDER_SECONDS);
+        let (mut graph, output) = rack::build(RENDER_SAMPLE_RATE, &patch)?;
+        record::render(&mut graph, output, seconds, path)
+            .map_err(|e| format!("cannot render to {}: {e}", path.display()))?;
+        println!("wrote {seconds} s to {}", path.display());
+        return Ok(());
+    }
     let (device, config) = audio::default_output()?;
     let (graph, output) = rack::build(config.sample_rate as f32, &patch)?;
     let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
-    let playback = audio::play(&device, config, engine)?;
+    let (tap, recorder) = record::tap(config.sample_rate);
+    let playback = audio::play(&device, config, engine, tap)?;
     if args.tui {
-        tui::run(App::new(controller), &playback)?;
+        tui::run(App::new(controller), &playback, recorder)?;
     } else {
-        gui::run(controller, &patch, playback)?;
+        gui::run(controller, &patch, playback, recorder)?;
     }
     Ok(())
 }
@@ -106,6 +146,7 @@ mod tests {
         let args = parse(&[]).unwrap().unwrap();
         assert!(!args.tui);
         assert_eq!(args.patch, None);
+        assert_eq!(args.render, None);
     }
 
     #[test]
@@ -124,5 +165,28 @@ mod tests {
                 .starts_with("unknown option")
         );
         assert!(parse(&["a", "b"]).unwrap_err().starts_with("too many"));
+    }
+
+    #[test]
+    fn render_takes_a_path_and_an_optional_duration() {
+        let args = parse(&["--render", "out.wav", "bass"]).unwrap().unwrap();
+        assert_eq!(args.render, Some(PathBuf::from("out.wav")));
+        assert_eq!(args.seconds, None);
+        assert_eq!(args.patch.as_deref(), Some("bass"));
+
+        let args = parse(&["--seconds", "2.5", "--render", "x.wav"])
+            .unwrap()
+            .unwrap();
+        assert_eq!(args.seconds, Some(2.5));
+    }
+
+    #[test]
+    fn render_mistakes() {
+        let error = |args: &[&str]| parse(args).unwrap_err();
+        assert!(error(&["--render"]).starts_with("--render needs a value"));
+        assert!(error(&["--render", "x.wav", "--seconds", "-1"]).starts_with("invalid duration"));
+        assert!(error(&["--render", "x.wav", "--seconds", "abc"]).starts_with("invalid duration"));
+        assert!(error(&["--seconds", "3"]).starts_with("--seconds only goes with --render"));
+        assert!(error(&["--render", "x.wav", "--tui"]).contains("do not go together"));
     }
 }

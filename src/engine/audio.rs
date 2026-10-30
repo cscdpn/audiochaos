@@ -8,6 +8,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, SampleFormat, Stream, StreamConfig};
 
 use super::control::Engine;
+use super::record::Tap;
 
 /// The default output device and its preferred configuration. The sample rate
 /// must be known before building the graph, hence the two-step setup.
@@ -38,10 +39,13 @@ impl Playback {
     }
 }
 
+/// Plays the engine's output, also handing every sample to `tap` for live
+/// recording.
 pub fn play(
     device: &Device,
     config: StreamConfig,
     mut engine: Engine,
+    mut tap: Tap,
 ) -> Result<Playback, Box<dyn Error>> {
     let channels = config.channels as usize;
     let errors = Arc::new(AtomicUsize::new(0));
@@ -51,7 +55,9 @@ pub fn play(
         move |data: &mut [f32], _| {
             // The engine is mono: the same sample goes to every channel.
             for frame in data.chunks_mut(channels) {
-                frame.fill(engine.next_sample());
+                let sample = engine.next_sample();
+                tap.push(sample);
+                frame.fill(sample);
             }
         },
         move |_| {

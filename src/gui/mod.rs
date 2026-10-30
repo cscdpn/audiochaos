@@ -12,24 +12,27 @@ use eframe::egui;
 
 use crate::engine::audio::Playback;
 use crate::engine::control::Controller;
+use crate::engine::record::{self, Recorder};
 use crate::patch::Patch;
 use crate::rack;
 use editor::Editor;
 
 /// How often the window refreshes without input, to keep the audio error
-/// count current.
+/// count and the recording time current.
 const REFRESH: Duration = Duration::from_millis(250);
 
 /// Runs until the window is closed. `patch` is the one already playing; only
-/// its block positions are read.
+/// its block positions are read. Recordings go to the current directory.
 pub fn run(
     controller: Controller,
     patch: &Patch,
     playback: Playback,
+    recorder: Recorder,
 ) -> Result<(), Box<dyn Error>> {
     let app = GuiApp {
         editor: Editor::new(controller, &patch.positions),
         playback,
+        recorder,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -45,6 +48,7 @@ struct GuiApp {
     editor: Editor,
     /// Owned so the sound plays exactly as long as the window is open.
     playback: Playback,
+    recorder: Recorder,
 }
 
 impl eframe::App for GuiApp {
@@ -53,6 +57,8 @@ impl eframe::App for GuiApp {
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("Patch", |ui| self.patch_menu(ui));
+                ui.separator();
+                self.record_button(ui);
                 ui.separator();
                 ui.label(&self.editor.status);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -80,6 +86,19 @@ impl GuiApp {
         }
         if ui.button("Export…").clicked() {
             self.export();
+        }
+    }
+
+    fn record_button(&mut self, ui: &mut egui::Ui) {
+        let button = match self.recorder.elapsed() {
+            Some(elapsed) => egui::Button::new(
+                egui::RichText::new(format!("■ Stop  {}", record::clock(elapsed)))
+                    .color(egui::Color32::RED),
+            ),
+            None => egui::Button::new("● Rec"),
+        };
+        if ui.add(button).clicked() {
+            self.editor.status = self.recorder.toggle(Path::new("."));
         }
     }
 

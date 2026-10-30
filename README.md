@@ -23,6 +23,7 @@ left, outputs on the right, sliders for the knobs.
 - The canvas pans and zooms with the mouse.
 - **Patch** menu: load a built-in preset, **Import…** a patch file, or
   **Export…** the current patch, block positions included.
+- **● Rec** records what you hear (see [Recording](#recording)).
 
 ### Terminal UI
 
@@ -34,11 +35,29 @@ left, outputs on the right, sliders for the knobs.
   columns, `↑↓` select, `Enter` connects the selected output to the selected
   input, or disconnects it if already connected. In the inputs column, `●`
   marks a cable from the selected output and `○` a cable from elsewhere.
+- `r` starts or stops recording.
 - `q` or `Esc` quits.
 
 Every knob has a matching `cv` input: patch any signal into it to modulate
 the knob. A ±1 signal sweeps the knob's whole range, so go through `atten`
 to make a modulation subtle or to invert it.
+
+### Recording
+
+**● Rec** in the editor, or `r` in the terminal UI, records what the speakers
+play into `recording-001.wav`, `recording-002.wav`… in the current directory,
+until pressed again. Quitting mid-recording still saves a complete file.
+
+`--render` writes a patch to a file without the sound card, much faster than
+real time, at 48 kHz:
+
+```sh
+just run --render out.wav --seconds 60 bass
+```
+
+Files are mono 16-bit WAV, which plays anywhere; the master never leaves
+-1..1, so 16 bits lose nothing audible. Neither way overwrites an existing
+file.
 
 ### Patches
 
@@ -102,6 +121,10 @@ patch noise through `s&h` into a `freq cv`.
   mirror of the patch for display. Both front ends are clients of that same
   `Controller`; in the editor, a wire is drawn only once the controller has
   accepted the cable.
+- Live recording follows the same rule: the audio thread copies samples into
+  a second lock-free queue, and a writer thread empties it to disk. The queue
+  holds a second of audio; if the disk stalls longer, samples are dropped and
+  counted rather than glitching the sound.
 - The editor uses `eframe` with the glow (OpenGL) backend rather than the
   default wgpu, for far fewer dependencies, and is pinned to 0.36 because the
   node-graph widget, `egui-snarl` 0.12, is built on egui 0.36. Nothing on the audio thread allocates:
@@ -121,6 +144,7 @@ just build
 just run          # chaos preset
 just run bass     # bass preset
 just run my.json  # a patch file
+just run --render out.wav --seconds 60   # render to WAV, no sound card
 just tui          # terminal UI instead of the editor
 just test
 just lint   # cargo fmt --check + clippy

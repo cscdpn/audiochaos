@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style, Stylize};
@@ -6,10 +8,12 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use super::app::{App, Column, Screen, Slot};
 use crate::engine::graph::Cable;
+use crate::engine::record::clock;
 
 const BAR_WIDTH: usize = 24;
 
-pub fn draw(frame: &mut Frame, app: &App, audio_errors: usize) {
+/// `recording` is how long the running recording has lasted, if any.
+pub fn draw(frame: &mut Frame, app: &App, audio_errors: usize, recording: Option<Duration>) {
     let [header, body, footer] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Fill(1),
@@ -17,7 +21,7 @@ pub fn draw(frame: &mut Frame, app: &App, audio_errors: usize) {
     ])
     .areas(frame.area());
 
-    draw_header(frame, header, app.screen, audio_errors);
+    draw_header(frame, header, app.screen, audio_errors, recording);
     match app.screen {
         Screen::Knobs => draw_knobs(frame, body, app),
         Screen::Patch => draw_patch(frame, body, app),
@@ -25,7 +29,13 @@ pub fn draw(frame: &mut Frame, app: &App, audio_errors: usize) {
     draw_footer(frame, footer, app);
 }
 
-fn draw_header(frame: &mut Frame, area: Rect, screen: Screen, audio_errors: usize) {
+fn draw_header(
+    frame: &mut Frame,
+    area: Rect,
+    screen: Screen,
+    audio_errors: usize,
+    recording: Option<Duration>,
+) {
     let tab = |name: &'static str, active: bool| {
         if active {
             Span::from(format!(" {name} ")).reversed()
@@ -33,12 +43,15 @@ fn draw_header(frame: &mut Frame, area: Rect, screen: Screen, audio_errors: usiz
             Span::from(format!(" {name} "))
         }
     };
-    let line = Line::from(vec![
+    let mut line = Line::from(vec![
         " audiochaos ".bold(),
         tab("Knobs", screen == Screen::Knobs),
         tab("Patch", screen == Screen::Patch),
         format!("   audio errors: {audio_errors}").dim(),
     ]);
+    if let Some(elapsed) = recording {
+        line.push_span(format!("   ● REC {}", clock(elapsed)).red().bold());
+    }
     frame.render_widget(line, area);
 }
 
@@ -149,9 +162,11 @@ fn draw_column(
 
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
     let help = match app.screen {
-        Screen::Knobs => "↑↓ select   ←→ turn   shift+←→ or H/L turn faster   Tab patch   q quit",
+        Screen::Knobs => {
+            "↑↓ select   ←→ turn   shift+←→ or H/L turn faster   Tab patch   r record   q quit"
+        }
         Screen::Patch => {
-            "←→ outputs/inputs   ↑↓ select   Enter connect/disconnect   Tab knobs   q quit"
+            "←→ outputs/inputs   ↑↓ select   Enter connect/disconnect   Tab knobs   r record   q quit"
         }
     };
     let text = vec![Line::from(app.status.clone()), Line::from(help).dim()];
@@ -186,9 +201,11 @@ mod tests {
         assert_eq!(bar(1.0).chars().filter(|&c| c == '█').count(), BAR_WIDTH);
     }
 
-    fn render(app: &App) -> String {
+    fn render(app: &App, recording: Option<Duration>) -> String {
         let mut terminal = Terminal::new(TestBackend::new(120, 40)).unwrap();
-        terminal.draw(|frame| draw(frame, app, 3)).unwrap();
+        terminal
+            .draw(|frame| draw(frame, app, 3, recording))
+            .unwrap();
         terminal
             .backend()
             .buffer()
@@ -204,13 +221,15 @@ mod tests {
         let (_, controller) = Engine::new(graph, out, 16);
         let mut app = App::new(controller);
 
-        let knobs = render(&app);
+        let knobs = render(&app, None);
         assert!(knobs.contains("osc 1"));
         assert!(knobs.contains("cutoff"));
         assert!(knobs.contains("audio errors: 3"));
+        assert!(!knobs.contains("REC"));
 
         app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        let patch = render(&app);
+        let patch = render(&app, Some(Duration::from_secs(72)));
+        assert!(patch.contains("● REC 1:12"));
         assert!(patch.contains("osc 1 › saw"));
         assert!(patch.contains("filter › cutoff cv"));
     }
