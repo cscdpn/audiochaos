@@ -16,7 +16,8 @@ MIDI controller (see [MIDI controllers](#midi-controllers)).
 ### Graphical editor
 
 One block per module, signal inputs (orange) and knob CV inputs (blue) on the
-left, outputs on the right, sliders for the knobs.
+left, outputs on the right with what they carry (`±1`, `0..1`…), sliders for
+the knobs.
 
 - Right-click the canvas to add a module where you clicked; right-click a
   block's title to remove it. New modules are named after their type

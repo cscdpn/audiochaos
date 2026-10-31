@@ -14,6 +14,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "vca",
     inputs: &["in", "mod"],
     outputs: &["out"],
+    output_details: &["input × gain"],
     params: &[ParamInfo {
         name: "gain",
         min: 0.0,

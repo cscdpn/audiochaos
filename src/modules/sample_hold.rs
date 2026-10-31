@@ -9,6 +9,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "s&h",
     inputs: &["in", "trigger"],
     outputs: &["out"],
+    output_details: &["held input"],
     params: &[],
 };
 

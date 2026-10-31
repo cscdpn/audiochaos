@@ -14,6 +14,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "lfo",
     inputs: &[],
     outputs: &["sine", "triangle", "saw", "square"],
+    output_details: &["±1", "±1", "±1", "±1"],
     params: &[ParamInfo {
         name: "rate",
         min: 0.01,

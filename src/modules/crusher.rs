@@ -12,6 +12,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "crush",
     inputs: &["in"],
     outputs: &["out"],
+    output_details: &["crushed input"],
     params: &[
         ParamInfo {
             name: "bits",

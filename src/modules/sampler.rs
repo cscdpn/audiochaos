@@ -15,6 +15,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "sampler",
     inputs: &["trigger"],
     outputs: &["out"],
+    output_details: &["the sound"],
     params: &[
         // Spans as many octaves as an oscillator's `freq`, so a MIDI module's
         // `pitch` plays it in tune too.

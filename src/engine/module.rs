@@ -13,7 +13,11 @@ pub struct ModuleInfo {
     /// instances.
     pub name: &'static str,
     pub inputs: &'static [&'static str],
+    /// Port names, as patches refer to them: renaming one breaks saved patches.
     pub outputs: &'static [&'static str],
+    /// What each output carries, for the editor: its range tells how to set
+    /// the knob of a CV input it feeds.
+    pub output_details: &'static [&'static str],
     pub params: &'static [ParamInfo],
 }
 

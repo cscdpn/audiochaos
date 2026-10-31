@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::error::Error;
 
 use eframe::egui::{self, Color32, Pos2, Ui};
-use egui_snarl::ui::{PinInfo, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
+use egui_snarl::ui::{PinInfo, PinPlacement, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
 use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
 use crate::engine::control::{Controller, SampleState};
@@ -20,7 +20,7 @@ const SLIDER_WIDTH: f32 = 150.0;
 /// first, master last in the presets), starting a new column past this
 /// height.
 const COLUMN_HEIGHT: f32 = 900.0;
-const COLUMN_WIDTH: f32 = 330.0;
+const COLUMN_WIDTH: f32 = 460.0;
 const ROW_HEIGHT: f32 = 24.0;
 const BLOCK_GAP: f32 = 50.0;
 
@@ -114,7 +114,12 @@ impl Editor {
         };
         SnarlWidget::new()
             .id(egui::Id::new("patch"))
-            .style(SnarlStyle::new())
+            .style(SnarlStyle {
+                // Inside the block, the default, egui-snarl leaves no room for
+                // the pins of right-aligned outputs: labels run into them.
+                pin_placement: Some(PinPlacement::Edge),
+                ..SnarlStyle::new()
+            })
             .show(&mut self.snarl, &mut viewer, ui);
         self.disconnect_cables_without_wires();
     }
@@ -282,7 +287,9 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         snarl: &mut Snarl<NodeId>,
     ) -> impl SnarlPin + 'static {
         let info = self.controller.node(snarl[pin.id.node]).info;
+        // Laid out from the pin leftwards.
         ui.label(info.outputs[pin.id.output]);
+        ui.weak(info.output_details[pin.id.output]);
         PinInfo::circle().with_fill(AUDIO_PIN)
     }
 
@@ -667,15 +674,85 @@ mod tests {
         assert!(layout.last().unwrap()[0] > 0.0, "everything in one column");
     }
 
+    /// One frame of the editor as a window would draw it, flattened into what
+    /// gets painted.
+    fn paint(
+        editor: &mut Editor,
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+    ) -> Vec<egui::Shape> {
+        let input = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        let mut output = ctx.run_ui(input, |ui| editor.show_graph(ui));
+        // No renderer consumes the font textures here, and egui insists they
+        // are dropped explicitly.
+        output.textures_delta.clear();
+        let mut shapes = Vec::new();
+        fn flatten(shape: egui::Shape, into: &mut Vec<egui::Shape>) {
+            match shape {
+                egui::Shape::Vec(inner) => inner.into_iter().for_each(|s| flatten(s, into)),
+                other => into.push(other),
+            }
+        }
+        for clipped in output.shapes {
+            flatten(clipped.shape, &mut shapes);
+        }
+        shapes
+    }
+
+    fn texts(shapes: &[egui::Shape]) -> Vec<(String, egui::Rect)> {
+        shapes
+            .iter()
+            .filter_map(|shape| match shape {
+                egui::Shape::Text(t) if !t.galley.text().is_empty() => {
+                    Some((t.galley.text().to_string(), t.visual_bounding_rect()))
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn no_label_runs_into_a_pin_or_another_label() {
+        for preset in presets::names() {
+            let mut editor = editor(preset);
+            let ctx = egui::Context::default();
+            paint(&mut editor, &ctx, vec![]);
+            let shapes = paint(&mut editor, &ctx, vec![]);
+            let pins: Vec<_> = shapes
+                .iter()
+                .filter_map(|shape| match shape {
+                    egui::Shape::Circle(c) if c.fill == AUDIO_PIN || c.fill == CV_PIN => {
+                        Some(shape.visual_bounding_rect())
+                    }
+                    _ => None,
+                })
+                .collect();
+            assert!(!pins.is_empty());
+            let texts = texts(&shapes);
+            for (i, (text, rect)) in texts.iter().enumerate() {
+                assert!(
+                    pins.iter().all(|pin| !pin.intersects(*rect)),
+                    "{preset}: {text:?} touches a pin"
+                );
+                for (other, other_rect) in &texts[i + 1..] {
+                    assert!(
+                        !rect.intersects(*other_rect),
+                        "{preset}: {text:?} touches {other:?}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn renders_without_a_window() {
         let mut editor = editor("chaos");
         let ctx = egui::Context::default();
         for _ in 0..2 {
-            let mut output = ctx.run_ui(egui::RawInput::default(), |ui| editor.show_graph(ui));
-            // No renderer consumes the font textures here, and egui insists
-            // they are dropped explicitly.
-            output.textures_delta.clear();
+            paint(&mut editor, &ctx, vec![]);
         }
         assert!(editor.status.is_empty(), "{}", editor.status);
     }

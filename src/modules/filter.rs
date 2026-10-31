@@ -16,6 +16,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "filter",
     inputs: &["in"],
     outputs: &["lowpass", "bandpass", "highpass"],
+    output_details: &["lows", "mids", "highs"],
     params: &[
         ParamInfo {
             name: "cutoff",

@@ -19,6 +19,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "osc",
     inputs: &["fm"],
     outputs: &["sine", "saw", "square"],
+    output_details: &["±1", "±1", "±1"],
     params: &[
         ParamInfo {
             name: "freq",

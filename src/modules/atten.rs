@@ -23,6 +23,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "atten",
     inputs: &["a", "b", "c"],
     outputs: &["a", "b", "c"],
+    output_details: &["a × gain a", "b × gain b", "c × gain c"],
     params: &[gain("gain a"), gain("gain b"), gain("gain c")],
 };
 

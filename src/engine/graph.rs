@@ -363,6 +363,7 @@ mod tests {
         name: "offset",
         inputs: &["in"],
         outputs: &["out"],
+        output_details: &[""],
         params: &[ParamInfo {
             name: "offset",
             min: -10.0,
@@ -389,6 +390,7 @@ mod tests {
         name: "emit",
         inputs: &[],
         outputs: &["out"],
+        output_details: &[""],
         params: &[],
     };
     impl Module for Emit {

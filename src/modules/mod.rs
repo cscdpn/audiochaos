@@ -93,6 +93,18 @@ mod tests {
         }
         assert!(build("theremin", &Context::new(48_000.0), 1).is_none());
     }
+
+    #[test]
+    fn every_output_has_details() {
+        for info in KINDS {
+            assert_eq!(
+                info.output_details.len(),
+                info.outputs.len(),
+                "{}",
+                info.name
+            );
+        }
+    }
 }
 
 #[cfg(test)]

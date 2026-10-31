@@ -29,6 +29,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "seq",
     inputs: &[],
     outputs: &["cv", "gate"],
+    output_details: &["step, ±1", "0 or 1"],
     params: &[
         ParamInfo {
             name: "rate",

@@ -11,6 +11,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "master",
     inputs: &["in"],
     outputs: &["out"],
+    output_details: &["to the speakers"],
     params: &[ParamInfo {
         name: "volume",
         min: 0.0,

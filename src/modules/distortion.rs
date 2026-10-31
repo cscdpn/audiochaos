@@ -12,6 +12,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "dist",
     inputs: &["in"],
     outputs: &["out"],
+    output_details: &["shaped input"],
     params: &[
         ParamInfo {
             name: "drive",

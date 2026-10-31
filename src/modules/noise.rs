@@ -6,6 +6,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "noise",
     inputs: &[],
     outputs: &["white"],
+    output_details: &["±1"],
     params: &[],
 };
 

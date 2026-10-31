@@ -15,6 +15,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
     name: "delay",
     inputs: &["in"],
     outputs: &["out"],
+    output_details: &["input + echoes"],
     params: &[
         ParamInfo {
             name: "time",
