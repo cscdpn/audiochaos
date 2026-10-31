@@ -26,6 +26,7 @@ the knobs.
 - Right-click a wire to remove it, or a pin to remove all of its wires.
 - Ctrl+drag from a pin picks up its wires to move them to another pin;
   dropping them on nothing removes them.
+- Right-click a slider to reset it (see [below](#knobs-and-cv)).
 - The canvas pans and zooms with the mouse.
 - **Patch** menu: load a built-in preset, **Import…** a patch file, or
   **Export…** the current patch, block positions included.
@@ -46,9 +47,22 @@ or remove modules.
 - `r` starts or stops recording.
 - `q` or `Esc` quits.
 
+### Knobs and CV
+
 Every knob has a matching `cv` input: patch any signal into it to modulate
-the knob. A ±1 signal sweeps the knob's whole range, so go through `atten`
-to make a modulation subtle or to invert it.
+the knob. The signal **adds** to the knob's position, where 1 is the knob's
+whole travel, and the sum stops at the ends of the range. Neither multiplies
+or overrides the other, so the knob sets where the signal starts from:
+
+- Knob at its minimum, a 0..1 signal (a MIDI knob) covers the whole range. At
+  the middle, the same signal only covers the upper half.
+- Knob at its middle, a ±1 signal (an LFO) swings both ways but overshoots
+  both ends, and flattens there: go through `atten` at gain 0.5 to fit it
+  exactly, at a smaller gain to make it subtle, at a negative one to invert it.
+
+Right-clicking a slider in the editor returns it to its minimum, its middle
+or its default. Signal inputs follow their own rules: `fm` is scaled by the
+`fm depth` knob, and `mod` adds to the VCA's gain.
 
 ### Recording
 

@@ -7,7 +7,7 @@ use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
 use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
-use crate::engine::param::Scale;
+use crate::engine::param::{ParamInfo, Scale};
 use crate::engine::sample::Sample;
 use crate::modules::{self, Context, master, sampler};
 use crate::patch::{self, Patch};
@@ -166,6 +166,27 @@ fn default_layout(controller: &Controller) -> Vec<[f32; 2]> {
         .collect()
 }
 
+/// A slider whose right-click menu resets it. Returns whether `value` changed.
+fn knob(param: &ParamInfo, value: &mut f32, ui: &mut Ui) -> bool {
+    let slider = egui::Slider::new(value, param.min..=param.max)
+        .text(param.name)
+        .logarithmic(param.scale == Scale::Exponential)
+        .custom_formatter(|v, _| param.format(v as f32));
+    // Sliders only sense drags, and a menu opens on a click.
+    let response = ui.add(slider);
+    let mut changed = response.changed();
+    response.interact(egui::Sense::click()).context_menu(|ui| {
+        for (label, reset) in param.resets() {
+            if ui.button(label).clicked() {
+                *value = reset;
+                changed = true;
+                ui.close();
+            }
+        }
+    });
+    changed
+}
+
 /// Draws blocks for egui-snarl and turns edits into controller calls.
 struct Viewer<'a> {
     controller: &'a mut Controller,
@@ -311,11 +332,7 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         ui.spacing_mut().slider_width = SLIDER_WIDTH;
         ui.vertical(|ui| {
             for (p, (param, value)) in info.params.iter().zip(&mut values).enumerate() {
-                let slider = egui::Slider::new(value, param.min..=param.max)
-                    .text(param.name)
-                    .logarithmic(param.scale == Scale::Exponential)
-                    .custom_formatter(|v, _| param.format(v as f32));
-                if ui.add(slider).changed()
+                if knob(param, value, ui)
                     && let Err(e) = self.controller.set_param(id, p, *value)
                 {
                     *self.status = format!("knob not changed: {e}");
@@ -399,7 +416,7 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
 mod tests {
     use super::*;
     use crate::engine::control::Engine;
-    use crate::modules::{filter, master, oscillator};
+    use crate::modules::{delay, filter, master, oscillator};
     use crate::presets;
 
     fn editor(preset: &str) -> Editor {
@@ -674,6 +691,40 @@ mod tests {
         assert!(layout.last().unwrap()[0] > 0.0, "everything in one column");
     }
 
+    #[test]
+    fn right_clicking_a_knob_opens_its_menu() {
+        let param = &filter::INFO.params[filter::CUTOFF];
+        let mut value = param.default;
+        let ctx = egui::Context::default();
+        // Returns where the knob is and whether a menu is open.
+        let mut frame = |events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut seen = (egui::Rect::NOTHING, false);
+            let mut output = ctx.run_ui(input, |ui| {
+                knob(param, &mut value, ui);
+                seen = (ui.min_rect(), egui::Popup::is_any_open(ui.ctx()));
+            });
+            output.textures_delta.clear();
+            seen
+        };
+        let (slider, opened) = frame(vec![]);
+        assert!(!opened);
+        let pos = egui::pos2(slider.left() + 20.0, slider.center().y);
+        let button = |pressed| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        frame(vec![egui::Event::PointerMoved(pos)]);
+        frame(vec![button(true)]);
+        frame(vec![button(false)]);
+        assert!(frame(vec![]).1);
+    }
+
     /// One frame of the editor as a window would draw it, flattened into what
     /// gets painted.
     fn paint(
@@ -714,6 +765,23 @@ mod tests {
             .collect()
     }
 
+    fn text_at(shapes: &[egui::Shape], text: &str) -> egui::Rect {
+        texts(shapes)
+            .into_iter()
+            .find(|(t, _)| t == text)
+            .unwrap_or_else(|| panic!("{text:?} is not on screen"))
+            .1
+    }
+
+    fn click(pos: Pos2, button: egui::PointerButton, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos,
+            button,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
     #[test]
     fn no_label_runs_into_a_pin_or_another_label() {
         for preset in presets::names() {
@@ -745,6 +813,46 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn the_menu_of_a_knob_resets_it_in_the_playing_patch() {
+        use egui::PointerButton::{Primary, Secondary};
+
+        let mut editor = editor("keys");
+        let delay = module(&editor, "delay");
+        let param = &delay::INFO.params[delay::FEEDBACK];
+        assert_ne!(
+            editor.controller.node(delay).params[delay::FEEDBACK],
+            param.min
+        );
+
+        let ctx = egui::Context::default();
+        paint(&mut editor, &ctx, vec![]);
+        let shapes = paint(&mut editor, &ctx, vec![]);
+        // The slider lies left of its value and name.
+        let name = text_at(&shapes, param.name);
+        let on_slider = egui::pos2(name.left() - 100.0, name.center().y);
+        paint(
+            &mut editor,
+            &ctx,
+            vec![egui::Event::PointerMoved(on_slider)],
+        );
+        paint(&mut editor, &ctx, vec![click(on_slider, Secondary, true)]);
+        paint(&mut editor, &ctx, vec![click(on_slider, Secondary, false)]);
+        let shapes = paint(&mut editor, &ctx, vec![]);
+
+        let (label, _) = param.resets()[0];
+        let item = text_at(&shapes, label).center();
+        paint(&mut editor, &ctx, vec![egui::Event::PointerMoved(item)]);
+        paint(&mut editor, &ctx, vec![click(item, Primary, true)]);
+        paint(&mut editor, &ctx, vec![click(item, Primary, false)]);
+
+        assert_eq!(
+            editor.controller.node(delay).params[delay::FEEDBACK],
+            param.min
+        );
+        assert!(editor.status.is_empty(), "{}", editor.status);
     }
 
     #[test]

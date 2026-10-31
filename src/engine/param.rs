@@ -65,6 +65,17 @@ impl ParamInfo {
             Scale::Exponential => self.min * (self.max / self.min).powf(n),
         }
     }
+
+    /// The knob positions worth returning to. A CV adds to the knob, so where
+    /// the knob is decides what a signal can reach: a 0..1 signal covers the
+    /// whole range from the minimum, a ±1 signal swings around the middle.
+    pub fn resets(&self) -> [(&'static str, f32); 3] {
+        [
+            ("Minimum (for a 0..1 signal)", self.min),
+            ("Middle (for a ±1 signal)", self.from_normalized(0.5)),
+            ("Default", self.default),
+        ]
+    }
 }
 
 /// A value that glides towards its target with a one-pole low-pass, so that
@@ -177,6 +188,18 @@ mod tests {
         assert_eq!(p.from_normalized(-1.0), 1.0);
         assert_eq!(p.to_normalized(1e9), 1.0);
         assert_eq!(p.to_normalized(0.0), 0.0);
+    }
+
+    #[test]
+    fn resets_return_to_the_ends_the_middle_and_the_default_of_the_knob() {
+        let values = |p: ParamInfo| p.resets().map(|(_, v)| v);
+        assert_eq!(values(param(Scale::Linear, -1.0, 3.0)), [-1.0, 1.0, -1.0]);
+        let [min, middle, default] = values(ParamInfo {
+            default: 50.0,
+            ..param(Scale::Exponential, 10.0, 1000.0)
+        });
+        assert_eq!((min, default), (10.0, 50.0));
+        assert!((middle - 100.0).abs() < 1e-3);
     }
 
     #[test]
