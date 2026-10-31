@@ -229,7 +229,8 @@ patch noise through `s&h` into a `freq cv`.
 ## Build, run, test
 
 Requires a recent stable Rust toolchain and, on Linux, the ALSA development
-headers (`alsa-lib` on Arch, `libasound2-dev` on Debian/Ubuntu).
+headers (`alsa-lib` on Arch, `libasound2-dev` on Debian/Ubuntu). It also runs
+on Windows, MIDI controllers included, with nothing else to install.
 
 ```sh
 just build
