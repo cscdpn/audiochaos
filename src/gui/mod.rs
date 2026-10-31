@@ -110,7 +110,8 @@ impl GuiApp {
 
     fn load(&mut self, patch: &Patch, label: &str) {
         self.editor.status = match self.editor.load(patch) {
-            Ok(()) => format!("loaded {label}"),
+            Ok(problems) if problems.is_empty() => format!("loaded {label}"),
+            Ok(problems) => format!("loaded {label}; {}", problems.join("; ")),
             Err(e) => format!("cannot load {label}: {e}"),
         };
     }

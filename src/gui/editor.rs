@@ -5,10 +5,11 @@ use eframe::egui::{self, Color32, Pos2, Ui};
 use egui_snarl::ui::{PinInfo, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
 use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
-use crate::engine::control::Controller;
+use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
 use crate::engine::param::Scale;
-use crate::modules::{self, Context, master};
+use crate::engine::sample::Sample;
+use crate::modules::{self, Context, master, sampler};
 use crate::patch::{self, Patch};
 
 const AUDIO_PIN: Color32 = Color32::from_rgb(0xe0, 0x6c, 0x3c);
@@ -86,11 +87,12 @@ impl Editor {
         }
     }
 
-    /// Replaces the playing patch, block positions included.
-    pub fn load(&mut self, patch: &Patch) -> Result<(), Box<dyn Error>> {
-        patch.load_into(&mut self.controller, &self.context)?;
+    /// Replaces the playing patch, block positions included. Returns what went
+    /// wrong with its sound files, which leaves their samplers silent.
+    pub fn load(&mut self, patch: &Patch) -> Result<Vec<String>, Box<dyn Error>> {
+        let problems = patch.load_into(&mut self.controller, &self.context)?;
         self.rebuild(&patch.positions);
-        Ok(())
+        Ok(problems)
     }
 
     /// The playing patch, block positions included.
@@ -176,6 +178,27 @@ impl Viewer<'_> {
         }
     }
 
+    /// Shows the sound's file; clicking it picks another.
+    fn show_sample_button(&mut self, id: NodeId, sample: Option<&SampleState>, ui: &mut Ui) {
+        let label = sample.map_or("Load sample…", |s| Sample::file_name(&s.path));
+        let problem = sample.and_then(|s| s.problem.as_deref());
+        let text = match problem {
+            Some(_) => egui::RichText::new(label).color(Color32::RED),
+            None => egui::RichText::new(label),
+        };
+        let mut button = ui.button(text);
+        if let Some(problem) = problem {
+            button = button.on_hover_text(problem);
+        }
+        if button.clicked()
+            && let Some(path) = rfd::FileDialog::new()
+                .add_filter("WAV sound", &["wav"])
+                .pick_file()
+        {
+            self.load_sample(id, &path.to_string_lossy());
+        }
+    }
+
     fn unplug(&mut self, from: OutPinId, to: InPinId, snarl: &mut Snarl<NodeId>) {
         match self.controller.disconnect(Self::cable(snarl, from, to)) {
             Ok(_) => {
@@ -194,6 +217,19 @@ impl Viewer<'_> {
             }
             Err(e) => *self.status = format!("cannot add {kind}: {e}"),
         }
+    }
+
+    /// Gives a sampler the sound in a file. A file that cannot be read changes
+    /// nothing.
+    fn load_sample(&mut self, id: NodeId, path: &str) {
+        let name = Sample::file_name(path);
+        *self.status = match Sample::load(path) {
+            Ok(sample) => match self.controller.set_sample(id, Box::new(sample)) {
+                Ok(()) => format!("loaded {name}"),
+                Err(e) => format!("cannot load {name}: {e}"),
+            },
+            Err(e) => format!("cannot load {name}: {e}"),
+        };
     }
 
     /// Removes a module, its block and its wires.
@@ -264,6 +300,7 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
     ) {
         let node = self.controller.node(snarl[block]);
         let (id, info, mut values) = (node.id, node.info, node.params.clone());
+        let sample = node.sample.clone();
         ui.spacing_mut().slider_width = SLIDER_WIDTH;
         ui.vertical(|ui| {
             for (p, (param, value)) in info.params.iter().zip(&mut values).enumerate() {
@@ -276,6 +313,9 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
                 {
                     *self.status = format!("knob not changed: {e}");
                 }
+            }
+            if info.name == sampler::INFO.name {
+                self.show_sample_button(id, sample.as_ref(), ui);
             }
         });
     }
@@ -532,6 +572,43 @@ mod tests {
             .pos;
         assert_eq!([pos.x, pos.y], [10.0, 20.0]);
         assert_eq!(editor.patch().positions["filter 2"], [10.0, 20.0]);
+    }
+
+    #[test]
+    fn samplers_take_a_sound_from_a_file_or_say_why_not() {
+        let mut editor = editor("bass");
+        with_viewer(&mut editor, |viewer, snarl| {
+            viewer.add("sampler", egui::pos2(0.0, 0.0), snarl);
+        });
+        let id = module(&editor, "sampler");
+
+        with_viewer(&mut editor, |viewer, _| {
+            viewer.load_sample(id, "/nowhere/kick.wav");
+        });
+        assert!(
+            editor.status.starts_with("cannot load kick.wav: "),
+            "{}",
+            editor.status
+        );
+        assert!(editor.controller.node(id).sample.is_none());
+
+        let path =
+            std::env::temp_dir().join(format!("audiochaos-editor-{}.wav", std::process::id()));
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut wav = hound::WavWriter::create(&path, spec).unwrap();
+        wav.write_sample(1000_i16).unwrap();
+        wav.finalize().unwrap();
+        let path = path.to_str().unwrap();
+        with_viewer(&mut editor, |viewer, _| viewer.load_sample(id, path));
+        assert!(editor.status.starts_with("loaded audiochaos-editor-"));
+        let saved = editor.patch();
+        let entry = saved.modules.iter().find(|m| m.kind == "sampler").unwrap();
+        assert_eq!(entry.file.as_deref(), Some(path));
     }
 
     #[test]

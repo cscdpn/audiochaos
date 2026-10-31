@@ -7,7 +7,7 @@ use audiochaos::engine::control::Engine;
 use audiochaos::engine::{audio, record};
 use audiochaos::midi;
 use audiochaos::modules::Context;
-use audiochaos::patch::Patch;
+use audiochaos::patch::{self, Patch};
 use audiochaos::tui::{self, App};
 use audiochaos::{gui, presets};
 
@@ -111,6 +111,9 @@ fn run() -> Result<(), Box<dyn Error>> {
     if let Some(path) = &args.render {
         let seconds = args.seconds.unwrap_or(DEFAULT_RENDER_SECONDS);
         let (mut graph, output) = patch.build(&Context::new(RENDER_SAMPLE_RATE))?;
+        for problem in patch::sample_problems(&graph) {
+            eprintln!("warning: {problem}");
+        }
         record::render(&mut graph, output, seconds, path)
             .map_err(|e| format!("cannot render to {}: {e}", path.display()))?;
         println!("wrote {seconds} s to {}", path.display());
@@ -119,7 +122,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let (device, config) = audio::default_output()?;
     let context = Context::new(config.sample_rate as f32);
     // A missing MIDI setup is no reason not to play.
-    let (_midi_inputs, status) = match midi::connect(&context.midi) {
+    let (_midi_inputs, mut status) = match midi::connect(&context.midi) {
         Ok(inputs) if inputs.names.is_empty() => (Some(inputs), "no MIDI controller".to_string()),
         Ok(inputs) => {
             let status = format!("MIDI: {}", inputs.names.join(", "));
@@ -128,6 +131,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         Err(e) => (None, format!("no MIDI: {e}")),
     };
     let (graph, output) = patch.build(&context)?;
+    for problem in patch::sample_problems(&graph) {
+        status = format!("{status}; {problem}");
+    }
     let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
     let (tap, recorder) = record::tap(config.sample_rate);
     let playback = audio::play(&device, config, engine, tap)?;

@@ -28,7 +28,8 @@ const BEND_SEMITONES: f32 = 2.0;
 /// a gate per pad, and the knobs (0..1).
 ///
 /// `pitch` is tuned for an oscillator's `freq cv`: patched there, the `freq`
-/// knob sets the pitch of middle C and every key is a semitone.
+/// knob sets the pitch of middle C and every key is a semitone. A sampler's
+/// `speed cv` spans the same octaves, so it works there too.
 pub struct Midi {
     state: Arc<State>,
     /// MIDI values come in steps of 1/127; gliding over them avoids audible

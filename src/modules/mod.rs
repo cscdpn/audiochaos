@@ -12,6 +12,7 @@ pub mod midi;
 pub mod noise;
 pub mod oscillator;
 pub mod sample_hold;
+pub mod sampler;
 pub mod sequencer;
 pub mod vca;
 
@@ -39,12 +40,13 @@ impl Context {
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 13] = [
+pub const KINDS: [&ModuleInfo; 14] = [
     &midi::INFO,
     &sequencer::INFO,
     &lfo::INFO,
     &noise::INFO,
     &sample_hold::INFO,
+    &sampler::INFO,
     &atten::INFO,
     &oscillator::INFO,
     &filter::INFO,
@@ -65,6 +67,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
         "lfo" => Box::new(lfo::Lfo::new(sr)),
         "noise" => Box::new(noise::Noise::new(seed)),
         "s&h" => Box::new(sample_hold::SampleHold::new()),
+        "sampler" => Box::new(sampler::Sampler::new(sr)),
         "atten" => Box::new(atten::Atten),
         "osc" => Box::new(oscillator::Oscillator::new(sr)),
         "filter" => Box::new(filter::Filter::new(sr)),

@@ -1,4 +1,5 @@
 use super::param::ParamInfo;
+use super::sample::Sample;
 
 /// Number of samples processed per call. Small enough for low latency,
 /// large enough to amortise the per-call overhead.
@@ -45,4 +46,17 @@ pub trait Module: Send {
     /// cables into one are summed). `params` holds one buffer per parameter,
     /// already smoothed and modulated by its CV input, in the parameter's units.
     fn process(&mut self, inputs: &[Buffer], params: &[Buffer], outputs: &mut [Buffer]);
+
+    /// Gives the module a sound to play, and hands back what it no longer
+    /// needs so the caller chooses where that is freed. Must not allocate or
+    /// free: it runs on the audio thread. Modules that play no sound hand back
+    /// the one they were given.
+    fn set_sample(&mut self, sample: Box<Sample>) -> Option<Box<Sample>> {
+        Some(sample)
+    }
+
+    /// The sound the module plays, if it plays one.
+    fn sample(&self) -> Option<&Sample> {
+        None
+    }
 }

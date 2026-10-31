@@ -13,7 +13,8 @@ use serde::{Deserialize, Serialize};
 use crate::engine::control::Controller;
 use crate::engine::graph::{Cable, CableSet, Graph, GraphError, MAX_MODULES, NodeId};
 use crate::engine::module::ModuleInfo;
-use crate::modules::{self, Context, master};
+use crate::engine::sample::Sample;
+use crate::modules::{self, Context, master, sampler};
 
 /// Bumped on incompatible format changes, so old files fail loudly instead of
 /// loading wrong.
@@ -65,6 +66,10 @@ pub struct PatchModule {
     /// One of [`modules::KINDS`].
     #[serde(rename = "type")]
     pub kind: String,
+    /// The sound a sampler plays, as a path, relative to the directory the
+    /// program runs in unless absolute.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -85,6 +90,8 @@ pub enum PatchError {
         kind: String,
     },
     DuplicateModule(String),
+    /// A module other than a sampler was given a file.
+    NotASampler(String),
     TooManyModules,
     /// A patch needs exactly one master; holds how many it has.
     Masters(usize),
@@ -114,6 +121,7 @@ impl fmt::Display for PatchError {
                 write!(f, "module {module:?} has unknown type {kind:?}")
             }
             PatchError::DuplicateModule(m) => write!(f, "two modules are named {m:?}"),
+            PatchError::NotASampler(m) => write!(f, "module {m:?} is no sampler: it takes no file"),
             PatchError::TooManyModules => write!(f, "too many modules (max {MAX_MODULES})"),
             PatchError::Masters(n) => {
                 write!(f, "a patch needs exactly one master module, not {n}")
@@ -154,6 +162,7 @@ impl Patch {
                     .map(|(name, kind)| PatchModule {
                         name: name.to_string(),
                         kind: kind.to_string(),
+                        file: None,
                     })
                     .collect();
                 patch.version = VERSION;
@@ -168,8 +177,14 @@ impl Patch {
     }
 
     /// Records every module, knob and cable. `params` holds each module's
-    /// knob values, in the order of `modules`.
-    pub fn capture(modules: &Modules, params: &[&[f32]], cables: &[Cable]) -> Patch {
+    /// knob values and `files` its sound file if it has one, both in the order
+    /// of `modules`.
+    pub fn capture(
+        modules: &Modules,
+        params: &[&[f32]],
+        files: &[Option<&str>],
+        cables: &[Cable],
+    ) -> Patch {
         let knobs = modules
             .iter()
             .zip(params)
@@ -209,9 +224,11 @@ impl Patch {
             description: String::new(),
             modules: modules
                 .iter()
-                .map(|(_, name, info)| PatchModule {
+                .zip(files)
+                .map(|((_, name, info), file)| PatchModule {
                     name: name.to_string(),
                     kind: info.name.to_string(),
+                    file: file.map(str::to_string),
                 })
                 .collect(),
             knobs,
@@ -300,6 +317,12 @@ impl Patch {
                 }
             })?;
             let id = graph.add(&m.name, module);
+            if let Some(file) = &m.file {
+                if m.kind != sampler::INFO.name {
+                    return Err(PatchError::NotASampler(m.name.clone()));
+                }
+                graph.set_sample(id, Box::new(Sample::load_or_silence(file)));
+            }
             if m.kind == master::INFO.name {
                 masters.push(id);
             }
@@ -327,18 +350,24 @@ impl Patch {
             })
             .collect();
         let params: Vec<&[f32]> = params.iter().map(Vec::as_slice).collect();
-        Patch::capture(&graph_modules(graph), &params, graph.cables())
+        let files: Vec<_> = graph
+            .nodes()
+            .map(|n| graph.sample(n).map(|s| s.path.as_str()))
+            .collect();
+        Patch::capture(&graph_modules(graph), &params, &files, graph.cables())
     }
 
-    /// Replaces the playing patch, modules included.
+    /// Replaces the playing patch, modules included. Returns what went wrong
+    /// with its sound files, which leaves their samplers silent.
     pub fn load_into(
         &self,
         controller: &mut Controller,
         context: &Context,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<Vec<String>, Box<dyn Error>> {
         let (graph, output) = self.build(context)?;
+        let problems = sample_problems(&graph);
         controller.replace(graph, output)?;
-        Ok(())
+        Ok(problems)
     }
 
     pub fn from_controller(controller: &Controller) -> Patch {
@@ -347,12 +376,30 @@ impl Patch {
             .iter()
             .map(|n| n.params.as_slice())
             .collect();
+        let files: Vec<_> = controller
+            .nodes()
+            .iter()
+            .map(|n| n.sample.as_ref().map(|s| s.path.as_str()))
+            .collect();
         Patch::capture(
             &controller_modules(controller),
             &params,
+            &files,
             controller.cables(),
         )
     }
+}
+
+/// What went wrong with a graph's sound files, one message per file.
+pub fn sample_problems(graph: &Graph) -> Vec<String> {
+    graph
+        .nodes()
+        .filter_map(|n| graph.sample(n))
+        .filter_map(|s| {
+            let problem = s.problem.as_ref()?;
+            Some(format!("cannot load {}: {problem}", s.path))
+        })
+        .collect()
 }
 
 /// Adds a module of the given kind to the playing patch, named after its kind
@@ -528,6 +575,92 @@ mod tests {
         assert_eq!(
             error.to_string(),
             r#"module "theremin" has unknown type "theremin""#
+        );
+    }
+
+    fn sampler_patch(file: &str) -> Patch {
+        patch(&format!(
+            r#"{{ "version": 2, "modules": [
+                {{ "name": "s", "type": "sampler", "file": {file:?} }},
+                {{ "name": "master", "type": "master" }}
+            ], "knobs": {{ "s": {{ "loop": 1.0 }} }}, "cables": [
+                {{ "from": "s", "output": "out", "to": "master", "input": "in" }}
+            ] }}"#
+        ))
+    }
+
+    #[test]
+    fn samplers_load_their_file_and_save_its_path() {
+        let path = std::env::temp_dir()
+            .join(format!("audiochaos-patch-{}.wav", std::process::id()))
+            .to_str()
+            .unwrap()
+            .to_string();
+        let spec = hound::WavSpec {
+            channels: 1,
+            sample_rate: 48_000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut wav = hound::WavWriter::create(&path, spec).unwrap();
+        for _ in 0..4800 {
+            wav.write_sample(i16::MAX).unwrap();
+        }
+        wav.finalize().unwrap();
+
+        let p = sampler_patch(&path);
+        let (mut g, out) = p.build(&Context::new(SR)).unwrap();
+        assert!(sample_problems(&g).is_empty());
+        assert_eq!(
+            Patch::from_graph(&g).modules[0].file.as_deref(),
+            Some(&*path)
+        );
+        assert!(g.render(out, master::OUT, 4800)[4000] > 0.1, "it plays");
+
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 64);
+        assert!(
+            p.load_into(&mut controller, &Context::new(SR))
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            Patch::from_controller(&controller).modules[0]
+                .file
+                .as_deref(),
+            Some(&*path)
+        );
+    }
+
+    #[test]
+    fn a_missing_file_leaves_the_sampler_silent_and_keeps_the_path() {
+        let p = sampler_patch("/nowhere/kick.wav");
+        let (mut g, out) = p.build(&Context::new(SR)).unwrap();
+        let problems = sample_problems(&g);
+        assert_eq!(problems.len(), 1);
+        assert!(
+            problems[0].starts_with("cannot load /nowhere/kick.wav: "),
+            "{problems:?}"
+        );
+        assert!(g.render(out, master::OUT, 4800).iter().all(|&s| s == 0.0));
+        assert_eq!(
+            Patch::from_graph(&g).modules[0].file.as_deref(),
+            Some("/nowhere/kick.wav"),
+            "saving does not lose it"
+        );
+
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 64);
+        let problems = p.load_into(&mut controller, &Context::new(SR)).unwrap();
+        assert_eq!(problems.len(), 1);
+    }
+
+    #[test]
+    fn only_samplers_take_a_file() {
+        let json = r#"{ "version": 2, "modules": [
+            { "name": "master", "type": "master", "file": "x.wav" }
+        ] }"#;
+        assert_eq!(
+            error(json),
+            r#"module "master" is no sampler: it takes no file"#
         );
     }
 

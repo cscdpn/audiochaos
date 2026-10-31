@@ -6,6 +6,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 
 use super::graph::{Cable, CableSet, Graph, GraphError, MAX_MODULES, Node, NodeId, free_slot};
 use super::module::{BLOCK, Module, ModuleInfo};
+use super::sample::Sample;
 
 enum Command {
     SetParam {
@@ -18,6 +19,7 @@ enum Command {
     Add(NodeId, Box<Node>),
     Remove(NodeId),
     Replace(Box<Graph>, NodeId),
+    SetSample(NodeId, Box<Sample>),
 }
 
 /// What the audio thread hands back to be freed on the UI thread: freeing
@@ -28,6 +30,8 @@ enum Retired {
     Node(Box<Node>),
     #[allow(dead_code)]
     Graph(Box<Graph>),
+    #[allow(dead_code)]
+    Sample(Box<Sample>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -63,6 +67,25 @@ pub struct NodeState {
     pub info: &'static ModuleInfo,
     /// Knob values, in the parameters' units.
     pub params: Vec<f32>,
+    /// The sound it plays, for modules that play one.
+    pub sample: Option<SampleState>,
+}
+
+/// What the UI knows about a module's sound; the audio stays on the audio side.
+#[derive(Clone)]
+pub struct SampleState {
+    pub path: String,
+    /// Why the file could not be read, if it could not.
+    pub problem: Option<String>,
+}
+
+impl SampleState {
+    fn of(sample: &Sample) -> Self {
+        Self {
+            path: sample.path.clone(),
+            problem: sample.problem.clone(),
+        }
+    }
 }
 
 /// The UI side. The graph itself lives on the audio thread, so the controller
@@ -162,6 +185,7 @@ impl Controller {
             name,
             info,
             params: info.params.iter().map(|p| p.default).collect(),
+            sample: None,
         });
         Ok(id)
     }
@@ -175,6 +199,16 @@ impl Controller {
         let index = self.index(id);
         self.nodes.remove(index);
         self.cables.remove_node(id);
+        Ok(())
+    }
+
+    /// Gives a module a sound to play. Its previous sound comes back to be
+    /// freed on this thread.
+    pub fn set_sample(&mut self, id: NodeId, sample: Box<Sample>) -> Result<(), ControlError> {
+        let state = SampleState::of(&sample);
+        self.push(Command::SetSample(id, sample))?;
+        let index = self.index(id);
+        self.nodes[index].sample = Some(state);
         Ok(())
     }
 
@@ -230,6 +264,7 @@ fn mirror(graph: &Graph) -> (Vec<NodeState>, CableSet) {
                 name: graph.name(id).to_string(),
                 info,
                 params: (0..info.params.len()).map(|p| graph.param(id, p)).collect(),
+                sample: graph.sample(id).map(SampleState::of),
             }
         })
         .collect();
@@ -316,6 +351,11 @@ impl Engine {
                     self.output = output;
                     self.retire(Retired::Graph(old));
                 }
+                Command::SetSample(id, sample) => {
+                    if let Some(old) = self.graph.set_sample(id, sample) {
+                        self.retire(Retired::Sample(old));
+                    }
+                }
             }
         }
     }
@@ -332,6 +372,7 @@ mod tests {
     use super::*;
     use crate::modules::master::{self, Master};
     use crate::modules::oscillator::{self, Oscillator};
+    use crate::modules::sampler::Sampler;
     use crate::modules::vca::{self, Vca};
 
     const SR: f32 = 48_000.0;
@@ -477,6 +518,33 @@ mod tests {
         // The next command frees it.
         controller.set_param(out, master::VOLUME, 0.3).unwrap();
         assert_eq!(controller.retired.slots(), 0);
+    }
+
+    #[test]
+    fn a_new_sound_reaches_the_module_and_the_old_one_comes_back() {
+        let (mut engine, mut controller, _, _) = engine(16);
+        let id = controller
+            .add("sampler".to_string(), Box::new(Sampler::new(SR)))
+            .unwrap();
+        assert!(controller.node(id).sample.is_none());
+        let sound = |path: &str| {
+            Box::new(Sample {
+                path: path.to_string(),
+                frames: vec![0.5],
+                sample_rate: 48_000,
+                problem: None,
+            })
+        };
+        controller.set_sample(id, sound("a.wav")).unwrap();
+        assert_eq!(controller.node(id).sample.as_ref().unwrap().path, "a.wav");
+        run_block(&mut engine);
+        assert_eq!(engine.graph.sample(id).unwrap().path, "a.wav");
+        assert_eq!(controller.retired.slots(), 0, "nothing to free yet");
+
+        controller.set_sample(id, sound("b.wav")).unwrap();
+        run_block(&mut engine);
+        assert_eq!(engine.graph.sample(id).unwrap().path, "b.wav");
+        assert_eq!(controller.retired.slots(), 1);
     }
 
     #[test]

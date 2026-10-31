@@ -98,6 +98,18 @@ Akai MPK mini mk2, which sends everything on channel 1:
 On Linux, MIDI needs the ALSA sequencer: if the status bar says "no MIDI",
 load it with `sudo modprobe snd-seq`.
 
+### Sampler
+
+A `sampler` plays a WAV file; click the button on its block to pick one. It
+restarts on each rising edge of `trigger`. `start` and `length` choose a slice,
+as fractions of the file. Past halfway, `loop` repeats that slice for as long as
+it stays there, trigger or not. `speed` is the playback rate; its `speed cv`
+takes a `midi` module's `pitch` in tune, the knob setting the speed of middle C.
+
+Some starting points: a pad's gate into `trigger` to fire a drum sound, keys on
+`pitch` and `gate` to play one chromatically, an LFO or noise through `s&h` into
+`start cv` with a short looping `length` to stutter.
+
 ### Patches
 
 A patch is a JSON file listing its modules, knob values and cables, with
@@ -117,7 +129,11 @@ modules, knobs and ports referred to by name:
 
 Modules are processed in the order listed, and a patch needs exactly one
 `master`. Knobs left out are at their default, so a patch always fully
-determines the sound. Version 1 files, from before modules could be added
+determines the sound. A sampler's sound is a `"file"` entry next to its `"type"`,
+a path that is relative to the directory the program runs in unless absolute
+(the editor saves absolute ones), so moving a sound breaks the patches using it:
+the patch still loads, that sampler stays silent, its button turns red and the
+path is kept when saving. Version 1 files, from before modules could be added
 and removed, still load: they get the old fixed rack. The built-in presets
 live in `presets/` in the same format and are compiled into the binary. `just run path/to/patch.json` starts on a patch
 file; an unknown module, knob or port is reported by name. Block positions
@@ -134,6 +150,7 @@ Module types, as patches and the editor's palette name them:
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
 | noise | white noise |
+| sampler | plays a slice of a WAV file, once or looping, at any speed |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
 | atten | three attenuverters: each output is its input times -1..1 |
 | osc | sine, saw, square, with through-zero linear FM |
@@ -181,6 +198,10 @@ patch noise through `s&h` into a `freq cv`.
   node-graph widget, `egui-snarl` 0.12, is built on egui 0.36.
 - Nothing on the audio thread allocates: delay lines are allocated up front
   and cables live in a fixed-capacity set.
+- A sound file is read on the UI thread and moved to the audio thread whole;
+  the one it replaces comes back the same way as a removed module. The file's
+  rate is handled by the playback rate, with linear interpolation, which aliases
+  at high speeds: welcome here.
 - Adding a module builds it on the UI thread, buffers included, and moves it
   to the audio thread whole; a removed module travels back through a second
   queue to be freed on the UI thread. Modules sit in a fixed number of

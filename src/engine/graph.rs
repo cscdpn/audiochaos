@@ -3,6 +3,7 @@ use std::fmt;
 
 use super::module::{BLOCK, Buffer, Module, ModuleInfo};
 use super::param::Smoothed;
+use super::sample::Sample;
 
 /// Cables are stored in a vector allocated once with this capacity, so that
 /// connecting from the audio thread never allocates.
@@ -252,6 +253,16 @@ impl Graph {
     /// The value the knob is set to (not the modulated value).
     pub fn param(&self, node: NodeId, param: usize) -> f32 {
         self.node(node).settings[param]
+    }
+
+    /// Gives a module a sound to play, and returns what it no longer needs so
+    /// the caller chooses where it is freed. Does not allocate or free.
+    pub fn set_sample(&mut self, node: NodeId, sample: Box<Sample>) -> Option<Box<Sample>> {
+        self.node_mut(node).module.set_sample(sample)
+    }
+
+    pub fn sample(&self, node: NodeId) -> Option<&Sample> {
+        self.node(node).module.sample()
     }
 
     /// The modules, in processing order.
