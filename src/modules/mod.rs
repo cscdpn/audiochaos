@@ -2,18 +2,23 @@
 //! constants, so patches read as `oscillator::OUT_SAW` rather than `1`.
 
 pub mod atten;
+pub mod chorus;
 pub mod crusher;
 pub mod delay;
 pub mod distortion;
+mod dsp;
 pub mod filter;
+pub mod flanger;
 pub mod lfo;
 pub mod master;
 pub mod midi;
 pub mod noise;
 pub mod oscillator;
+pub mod phaser;
 pub mod sample_hold;
 pub mod sampler;
 pub mod sequencer;
+pub mod univibe;
 pub mod vca;
 
 use std::sync::Arc;
@@ -40,7 +45,7 @@ impl Context {
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 14] = [
+pub const KINDS: [&ModuleInfo; 18] = [
     &midi::INFO,
     &sequencer::INFO,
     &lfo::INFO,
@@ -53,6 +58,10 @@ pub const KINDS: [&ModuleInfo; 14] = [
     &distortion::INFO,
     &crusher::INFO,
     &delay::INFO,
+    &chorus::INFO,
+    &flanger::INFO,
+    &phaser::INFO,
+    &univibe::INFO,
     &vca::INFO,
     &master::INFO,
 ];
@@ -74,6 +83,10 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
         "dist" => Box::new(distortion::Distortion),
         "crush" => Box::new(crusher::Crusher::new()),
         "delay" => Box::new(delay::Delay::new(sr)),
+        "chorus" => Box::new(chorus::Chorus::new(sr)),
+        "flanger" => Box::new(flanger::Flanger::new(sr)),
+        "phaser" => Box::new(phaser::Phaser::new(sr)),
+        "univibe" => Box::new(univibe::Univibe::new(sr)),
         "vca" => Box::new(vca::Vca),
         "master" => Box::new(master::Master),
         _ => return None,
@@ -172,6 +185,41 @@ pub(crate) mod test_util {
             out.extend_from_slice(&outputs[port]);
         }
         out
+    }
+
+    /// The level of a quiet sine after a module, relative to the level going
+    /// in, once the module has settled. Quiet, to stay clear of `tanh`.
+    pub fn gain_at(module: &mut dyn Module, freq: f32, params: &[f32], port: usize) -> f32 {
+        const LEVEL: f32 = 0.1;
+        let tone: Vec<f32> = sine(freq, 48_000.0, 48_000)
+            .iter()
+            .map(|s| s * LEVEL)
+            .collect();
+        let out = process_signal(module, &tone, params, port);
+        rms(&out[out.len() / 2..]) / (LEVEL / std::f32::consts::SQRT_2)
+    }
+
+    /// How many times the level of a steady sine rises through its average
+    /// over ten seconds after a module: how often the module moves the sound.
+    /// `freq` should be a multiple of 100 Hz, so that each 10 ms window holds
+    /// whole periods and only the module makes the level change.
+    pub fn wobbles(module: &mut dyn Module, freq: f32, params: &[f32], port: usize) -> usize {
+        let out = process_signal(module, &sine(freq, 48_000.0, 480_000), params, port);
+        let levels: Vec<f32> = out.chunks_exact(480).map(rms).collect();
+        let average = levels.iter().sum::<f32>() / levels.len() as f32;
+        // Not counting rounding noise around a level that does not move.
+        let quiet = 0.01 * average;
+        let mut above = levels[0] > average;
+        let mut count = 0;
+        for level in levels {
+            if !above && level > average + quiet {
+                count += 1;
+                above = true;
+            } else if above && level < average - quiet {
+                above = false;
+            }
+        }
+        count
     }
 
     pub fn sine(freq: f32, sample_rate: f32, samples: usize) -> Vec<f32> {

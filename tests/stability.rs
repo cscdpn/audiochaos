@@ -65,6 +65,43 @@ fn random_patch(seed: u64) -> (Graph, NodeId) {
     (g, out)
 }
 
+/// Every kind of module, any knob position, its inputs all fed noise.
+#[test]
+fn every_module_stays_finite_with_any_knobs() {
+    let context = Context::new(SR);
+    for info in modules::KINDS {
+        for seed in 0..8 {
+            let mut rng = Rng(seed);
+            let mut g = Graph::new(SR);
+            let noise = g.add("noise", modules::build("noise", &context, 7).unwrap());
+            let node = g.add(info.name, modules::build(info.name, &context, 1).unwrap());
+            for p in 0..info.params.len() {
+                // The ends of the range, half of the time.
+                let n = match rng.below(4) {
+                    0 => 0.0,
+                    1 => 1.0,
+                    _ => rng.unit(),
+                };
+                g.init_param(node, p, info.params[p].from_normalized(n));
+            }
+            for to_port in 0..info.inputs.len() {
+                let cable = Cable {
+                    from: noise,
+                    from_port: 0,
+                    to: node,
+                    to_port,
+                };
+                g.connect(cable).unwrap();
+            }
+            for _ in 0..48_000 / BLOCK {
+                g.process();
+                let finite = g.outputs(node).iter().flatten().all(|s| s.is_finite());
+                assert!(finite, "{} went non-finite, seed {seed}", info.name);
+            }
+        }
+    }
+}
+
 #[test]
 fn random_patches_stay_finite_and_bounded() {
     for seed in 0..25 {

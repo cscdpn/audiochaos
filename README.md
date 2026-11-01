@@ -173,12 +173,26 @@ Module types, as patches and the editor's palette name them:
 | dist | drive into a blend of `tanh` clipping and sine wavefolding |
 | crush | bitcrusher: bit depth and sample-rate reduction |
 | delay | up to 2 s, feedback above 1 self-oscillates instead of exploding |
+| chorus | three voices swaying around 20 ms, like several players together |
+| flanger | a very short swept delay, whose feedback sharpens the comb and can sing |
+| phaser | four all-pass stages swept together, two moving notches |
+| univibe | staggered stages swept by a lagging lamp: a lopsided throb |
 | vca | `out = in * (gain + mod)`, ring modulator when `mod` is audio |
 | master | volume and soft limiter, the only thing the speakers hear |
 
 Some starting points for noise: patch an oscillator into its own `fm`, feed
 the delay back into an oscillator's `fm`, push filter resonance to the max,
 patch noise through `s&h` into a `freq cv`.
+
+The modulation effects each have their own LFO. To drive the flanger or the
+phaser from elsewhere, turn `depth` down and patch a signal into `time cv` or
+`freq cv`. Their `feedback` self-oscillates through `tanh` above 1 and sounds
+hollow below 0. `mix` at 1 makes the univibe a pure vibrato. Other classics
+are already a patch away:
+
+- Tremolo: `lfo` into a VCA's `mod`.
+- Ring modulation: `osc` into a VCA's `mod`.
+- Auto-wah: `lfo` into the `cutoff cv` of a `filter`, on its `bandpass`.
 
 ## Design notes
 
@@ -191,6 +205,9 @@ patch noise through `s&h` into a `freq cv`.
 - The graph owns knob smoothing and modulation: each knob's CV is added in
   normalized knob space (logarithmic for frequencies and times), so modules
   just receive per-sample parameter values.
+- The modulation effects are modules rather than patches of `delay` and `lfo`:
+  all-pass stages exist nowhere else, and a flanger's feedback lives within
+  milliseconds that a cable's block of delay would already use up.
 - Every module input is clamped to ±10 and NaN reads as 0, like the power
   rails of a hardware modular. Without it, feedback through VCAs runs off to
   infinity and a single non-finite sample poisons a filter's state for good.

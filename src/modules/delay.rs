@@ -1,5 +1,6 @@
 use crate::engine::module::{Buffer, Module, ModuleInfo};
 use crate::engine::param::{ParamInfo, Scale};
+use crate::modules::dsp::DelayLine;
 
 pub const IN: usize = 0;
 
@@ -44,14 +45,12 @@ pub static INFO: ModuleInfo = ModuleInfo {
     ],
 };
 
-/// Delay line with fractional, interpolated read position, so modulating the
-/// time bends the pitch like tape. The feedback path goes through `tanh`:
-/// above 1 the echoes grow into a screaming self-oscillation instead of
-/// exploding to infinity.
+/// Echoes, from a line whose modulated time bends the pitch like tape. The
+/// feedback path goes through `tanh`: above 1 the echoes grow into a screaming
+/// self-oscillation instead of exploding to infinity.
 pub struct Delay {
     sample_rate: f32,
-    buffer: Vec<f32>,
-    write: usize,
+    line: DelayLine,
 }
 
 impl Delay {
@@ -59,18 +58,8 @@ impl Delay {
     pub fn new(sample_rate: f32) -> Self {
         Self {
             sample_rate,
-            buffer: vec![0.0; (MAX_SECONDS * sample_rate) as usize + 2],
-            write: 0,
+            line: DelayLine::new((MAX_SECONDS * sample_rate) as usize),
         }
-    }
-
-    fn read(&self, delay_samples: f32) -> f32 {
-        let len = self.buffer.len();
-        let position = (self.write as f32 - delay_samples).rem_euclid(len as f32);
-        let i = position as usize % len;
-        let frac = position.fract();
-        let next = (i + 1) % len;
-        self.buffer[i] * (1.0 - frac) + self.buffer[next] * frac
     }
 }
 
@@ -80,12 +69,9 @@ impl Module for Delay {
     }
 
     fn process(&mut self, inputs: &[Buffer], params: &[Buffer], outputs: &mut [Buffer]) {
-        let max_delay = (self.buffer.len() - 2) as f32;
         for (i, x) in inputs[IN].iter().enumerate() {
-            let delay_samples = (params[TIME][i] * self.sample_rate).clamp(1.0, max_delay);
-            let wet = self.read(delay_samples);
-            self.buffer[self.write] = x + (params[FEEDBACK][i] * wet).tanh();
-            self.write = (self.write + 1) % self.buffer.len();
+            let wet = self.line.read(params[TIME][i] * self.sample_rate);
+            self.line.push(x + (params[FEEDBACK][i] * wet).tanh());
             let mix = params[MIX][i];
             outputs[OUT][i] = (1.0 - mix) * x + mix * wet;
         }
