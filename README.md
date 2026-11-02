@@ -30,6 +30,8 @@ the knobs.
 - The canvas pans and zooms with the mouse.
 - **Patch** menu: load a built-in preset, **Import…** a patch file, or
   **Export…** the current patch, block positions included.
+- The computer keyboard plays the `midi` modules, without a MIDI controller
+  (see [below](#computer-keyboard)).
 - **● Rec** records what you hear (see [Recording](#recording)).
 
 ### Terminal UI
@@ -112,6 +114,21 @@ Akai MPK mini mk2, which sends everything on channel 1:
 
 On Linux, MIDI needs the ALSA sequencer: if the status bar says "no MIDI",
 load it with `sudo modprobe snd-seq`.
+
+### Computer keyboard
+
+In the editor, the two bottom letter rows play one octave from middle C, as
+`midi` modules' `pitch`, `gate` and `velocity` (always 100), alongside any
+MIDI controller: white keys on the lower row, black keys on the row above.
+
+```
+QWERTY:   S D   G H J         AZERTY:   S D   G H J
+         Z X C V B N M                 W X C V B N ,
+```
+
+Keys are read by position, so the layout does not matter. They play nothing
+with Ctrl or Alt held, or while typing a value into a slider. The terminal UI
+has no such keyboard: most terminals do not report key releases.
 
 ### Sampler
 

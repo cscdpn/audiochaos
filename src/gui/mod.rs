@@ -2,10 +2,12 @@
 //! cables, sliders for knobs, and patch import and export.
 
 mod editor;
+mod keyboard;
 
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
 use eframe::egui;
@@ -17,6 +19,7 @@ use crate::modules::Context;
 use crate::patch::Patch;
 use crate::presets;
 use editor::Editor;
+use keyboard::Keyboard;
 
 /// How often the window refreshes without input, to keep the audio error
 /// count and the recording time current.
@@ -33,10 +36,12 @@ pub fn run(
     recorder: Recorder,
     status: String,
 ) -> Result<(), Box<dyn Error>> {
+    let keyboard = Keyboard::new(Arc::clone(&context.midi));
     let mut editor = Editor::new(controller, context, &patch.positions);
     editor.status = status;
     let app = GuiApp {
         editor,
+        keyboard,
         playback,
         recorder,
     };
@@ -52,6 +57,7 @@ pub fn run(
 
 struct GuiApp {
     editor: Editor,
+    keyboard: Keyboard,
     /// Owned so the sound plays exactly as long as the window is open.
     playback: Playback,
     recorder: Recorder,
@@ -60,6 +66,12 @@ struct GuiApp {
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         ui.ctx().request_repaint_after(REFRESH);
+        let playing = !ui.ctx().egui_wants_keyboard_input();
+        ui.ctx().input(|input| {
+            for event in &input.events {
+                self.keyboard.handle(event, playing);
+            }
+        });
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("Patch", |ui| self.patch_menu(ui));
