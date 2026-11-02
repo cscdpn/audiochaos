@@ -28,8 +28,9 @@ the knobs.
   dropping them on nothing removes them.
 - Right-click a slider to reset it (see [below](#knobs-and-cv)).
 - The canvas pans and zooms with the mouse.
-- **Patch** menu: load a built-in preset, **Import…** a patch file, or
-  **Export…** the current patch, block positions included.
+- **Patch** menu: load a built-in preset, **Arrange blocks** into columns
+  where none overlaps another, **Import…** a patch file, or **Export…** the
+  current patch, block positions included.
 - The computer keyboard plays the `midi` modules, without a MIDI controller
   (see [below](#computer-keyboard)).
 - **● Rec** records what you hear (see [Recording](#recording)).

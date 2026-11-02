@@ -98,6 +98,9 @@ impl GuiApp {
                 }
             }
         });
+        if ui.button("Arrange blocks").clicked() {
+            self.editor.arrange();
+        }
         ui.separator();
         if ui.button("Import…").clicked() {
             self.import();

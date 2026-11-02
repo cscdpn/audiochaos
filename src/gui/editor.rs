@@ -1,12 +1,14 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
 
-use eframe::egui::{self, Color32, Pos2, Ui};
+use eframe::egui::emath::TSTransform;
+use eframe::egui::{self, Color32, Pos2, Rect, Ui, Vec2};
 use egui_snarl::ui::{PinInfo, PinPlacement, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
 use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
 use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
+use crate::engine::module::ModuleInfo;
 use crate::engine::param::{ParamInfo, Scale};
 use crate::engine::sample::Sample;
 use crate::modules::{self, Context, master, sampler};
@@ -16,9 +18,8 @@ const AUDIO_PIN: Color32 = Color32::from_rgb(0xe0, 0x6c, 0x3c);
 const CV_PIN: Color32 = Color32::from_rgb(0x4c, 0x9b, 0xd6);
 const SLIDER_WIDTH: f32 = 150.0;
 
-/// Default layout: blocks stacked in columns, in processing order (sources
-/// first, master last in the presets), starting a new column past this
-/// height.
+/// Layout: blocks stacked in columns, in processing order (sources first,
+/// master last), starting a new column past this height.
 const COLUMN_HEIGHT: f32 = 900.0;
 const COLUMN_WIDTH: f32 = 460.0;
 const ROW_HEIGHT: f32 = 24.0;
@@ -35,6 +36,10 @@ pub struct Editor {
     context: Context,
     /// Each block holds the id of its module.
     snarl: Snarl<NodeId>,
+    /// Each block's size as last drawn, to arrange them.
+    sizes: HashMap<BlockId, Vec2>,
+    /// Set by `arrange`, so the next frame brings the blocks into view.
+    show_origin: bool,
     pub(super) status: String,
 }
 
@@ -48,6 +53,8 @@ impl Editor {
             controller,
             context,
             snarl: Snarl::new(),
+            sizes: HashMap::new(),
+            show_origin: false,
             status: String::new(),
         };
         editor.rebuild(positions);
@@ -59,14 +66,43 @@ impl Editor {
     fn rebuild(&mut self, positions: &BTreeMap<String, [f32; 2]>) {
         let layout = default_layout(&self.controller);
         self.snarl = Snarl::new();
+        self.sizes.clear();
         for (node, default) in self.controller.nodes().iter().zip(layout) {
-            let [x, y] = positions.get(&node.name).copied().unwrap_or(default);
-            self.snarl.insert_node(egui::pos2(x, y), node.id);
+            let pos = positions.get(&node.name).map(|&[x, y]| egui::pos2(x, y));
+            self.snarl.insert_node(pos.unwrap_or(default), node.id);
         }
         for &cable in self.controller.cables() {
             let (from, to) = wire(&self.snarl, cable);
             self.snarl.connect(from, to);
         }
+    }
+
+    /// Moves every block into columns where none overlaps another, the
+    /// master last, and brings them into view.
+    pub fn arrange(&mut self) {
+        let output = self.controller.output();
+        let mut blocks: Vec<_> = self
+            .controller
+            .nodes()
+            .iter()
+            .map(|n| (block(&self.snarl, n.id), n.id == output, n.info))
+            .collect();
+        // Stable, so the others keep their processing order.
+        blocks.sort_by_key(|&(_, is_output, _)| is_output);
+        let sizes = blocks.iter().map(|&(block, _, info)| {
+            // Blocks not drawn yet, if any, are guessed.
+            self.sizes
+                .get(&block)
+                .copied()
+                .unwrap_or_else(|| estimated_size(info))
+        });
+        let layout = columns(sizes);
+        for (&(block, _, _), pos) in blocks.iter().zip(layout) {
+            if let Some(node) = self.snarl.get_node_info_mut(block) {
+                node.pos = pos;
+            }
+        }
+        self.show_origin = true;
     }
 
     /// egui-snarl removes wires on its own, without asking the viewer, when
@@ -111,6 +147,9 @@ impl Editor {
             controller: &mut self.controller,
             context: &self.context,
             status: &mut self.status,
+            sizes: &mut self.sizes,
+            show_origin: &mut self.show_origin,
+            view: ui.max_rect(),
         };
         SnarlWidget::new()
             .id(egui::Id::new("patch"))
@@ -146,21 +185,31 @@ fn wire(snarl: &Snarl<NodeId>, cable: Cable) -> (OutPinId, InPinId) {
     (from, to)
 }
 
-/// Columns of blocks, sized from each block's pin count, in the controller's
-/// module order.
-fn default_layout(controller: &Controller) -> Vec<[f32; 2]> {
-    let (mut x, mut y) = (0.0, 0.0);
-    controller
-        .nodes()
-        .iter()
-        .map(|node| {
-            let rows = node.info.num_input_ports().max(node.info.outputs.len());
-            let height = ROW_HEIGHT * (rows + 1) as f32;
-            if y > 0.0 && y + height > COLUMN_HEIGHT {
-                (x, y) = (x + COLUMN_WIDTH, 0.0);
+/// Columns of blocks in the controller's module order, before any is drawn:
+/// their sizes are guessed.
+fn default_layout(controller: &Controller) -> Vec<Pos2> {
+    columns(controller.nodes().iter().map(|n| estimated_size(n.info)))
+}
+
+/// A block's size from its pin count, for blocks never drawn.
+fn estimated_size(info: &ModuleInfo) -> Vec2 {
+    let rows = info.num_input_ports().max(info.outputs.len());
+    egui::vec2(COLUMN_WIDTH - BLOCK_GAP, ROW_HEIGHT * (rows + 1) as f32)
+}
+
+/// Where blocks of these sizes go, stacked top to bottom in columns as wide
+/// as their widest block.
+fn columns(sizes: impl IntoIterator<Item = Vec2>) -> Vec<Pos2> {
+    let (mut x, mut y, mut width) = (0.0, 0.0, 0.0_f32);
+    sizes
+        .into_iter()
+        .map(|size| {
+            if y > 0.0 && y + size.y > COLUMN_HEIGHT {
+                (x, y, width) = (x + width + BLOCK_GAP, 0.0, 0.0);
             }
-            let position = [x, y];
-            y += height + BLOCK_GAP;
+            let position = egui::pos2(x, y);
+            y += size.y + BLOCK_GAP;
+            width = width.max(size.x);
             position
         })
         .collect()
@@ -192,6 +241,10 @@ struct Viewer<'a> {
     controller: &'a mut Controller,
     context: &'a Context,
     status: &'a mut String,
+    sizes: &'a mut HashMap<BlockId, Vec2>,
+    show_origin: &'a mut bool,
+    /// Where the graph is drawn, on screen.
+    view: Rect,
 }
 
 impl Viewer<'_> {
@@ -312,6 +365,24 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         ui.label(info.outputs[pin.id.output]);
         ui.weak(info.output_details[pin.id.output]);
         PinInfo::circle().with_fill(AUDIO_PIN)
+    }
+
+    fn final_node_rect(
+        &mut self,
+        block: BlockId,
+        rect: Rect,
+        _ui: &mut Ui,
+        _snarl: &mut Snarl<NodeId>,
+    ) {
+        self.sizes.insert(block, rect.size());
+    }
+
+    /// Shows the top left corner of the graph, where `arrange` starts, at the
+    /// current zoom.
+    fn current_transform(&mut self, to_global: &mut TSTransform, _snarl: &mut Snarl<NodeId>) {
+        if std::mem::take(self.show_origin) {
+            to_global.translation = self.view.min.to_vec2() + Vec2::splat(BLOCK_GAP);
+        }
     }
 
     fn has_body(&mut self, node: &NodeId) -> bool {
@@ -461,6 +532,9 @@ mod tests {
             controller: &mut editor.controller,
             context: &editor.context,
             status: &mut editor.status,
+            sizes: &mut editor.sizes,
+            show_origin: &mut editor.show_origin,
+            view: Rect::ZERO,
         };
         f(&mut viewer, &mut editor.snarl);
     }
@@ -686,9 +760,9 @@ mod tests {
     fn default_layout_keeps_columns_within_their_height() {
         let editor = editor("bass");
         let layout = default_layout(&editor.controller);
-        assert!(layout.iter().all(|[_, y]| *y < COLUMN_HEIGHT));
-        assert!(layout.windows(2).all(|w| w[1][0] >= w[0][0]));
-        assert!(layout.last().unwrap()[0] > 0.0, "everything in one column");
+        assert!(layout.iter().all(|p| p.y < COLUMN_HEIGHT));
+        assert!(layout.windows(2).all(|w| w[1].x >= w[0].x));
+        assert!(layout.last().unwrap().x > 0.0, "everything in one column");
     }
 
     #[test]
@@ -734,6 +808,9 @@ mod tests {
     ) -> Vec<egui::Shape> {
         let input = egui::RawInput {
             events,
+            // The window's size: without one, egui makes the screen huge and
+            // everything is in view.
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1400.0, 900.0))),
             ..Default::default()
         };
         let mut output = ctx.run_ui(input, |ui| editor.show_graph(ui));
@@ -853,6 +930,82 @@ mod tests {
             param.min
         );
         assert!(editor.status.is_empty(), "{}", editor.status);
+    }
+
+    /// Every block as drawn on the last frame, in graph space.
+    fn block_rects(editor: &Editor) -> Vec<(String, Rect)> {
+        editor
+            .snarl
+            .node_ids()
+            .map(|(block, &id)| {
+                let pos = editor.snarl.get_node_info(block).unwrap().pos;
+                let rect = Rect::from_min_size(pos, editor.sizes[&block]);
+                (editor.controller.node(id).name.clone(), rect)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn arranging_pulls_piled_up_blocks_apart() {
+        let mut editor = editor("keys");
+        with_viewer(&mut editor, |viewer, snarl| {
+            for kind in ["chorus", "flanger", "phaser", "sampler"] {
+                viewer.add(kind, egui::pos2(0.0, 0.0), snarl);
+            }
+        });
+        for (block, _) in editor
+            .snarl
+            .node_ids()
+            .map(|(b, &id)| (b, id))
+            .collect::<Vec<_>>()
+        {
+            editor.snarl.get_node_info_mut(block).unwrap().pos = egui::pos2(0.0, 0.0);
+        }
+        let ctx = egui::Context::default();
+        paint(&mut editor, &ctx, vec![]);
+        paint(&mut editor, &ctx, vec![]);
+        editor.arrange();
+        paint(&mut editor, &ctx, vec![]);
+
+        let rects = block_rects(&editor);
+        for (i, (name, rect)) in rects.iter().enumerate() {
+            for (other, other_rect) in &rects[i + 1..] {
+                assert!(!rect.intersects(*other_rect), "{name} overlaps {other}");
+            }
+        }
+        let rightmost = rects.iter().map(|(_, r)| r.left()).fold(0.0, f32::max);
+        let master = &rects.iter().find(|(n, _)| n == "master").unwrap().1;
+        assert_eq!(master.left(), rightmost, "the master is in the last column");
+    }
+
+    #[test]
+    fn arranging_brings_the_blocks_into_view() {
+        use egui::PointerButton::Primary;
+
+        let mut editor = editor("chaos");
+        let ctx = egui::Context::default();
+        let first = editor.controller.nodes()[0].name.clone();
+        let in_view = |shapes: &[egui::Shape]| {
+            texts(shapes)
+                .iter()
+                .any(|(t, r)| *t == first && ctx.content_rect().contains_rect(*r))
+        };
+        // Blocks far away, and the view taken there by a double click on the
+        // empty canvas, which egui-snarl answers by centring on the blocks.
+        for block in editor.snarl.node_ids().map(|(b, _)| b).collect::<Vec<_>>() {
+            editor.snarl.get_node_info_mut(block).unwrap().pos = egui::pos2(5000.0, 5000.0);
+        }
+        let empty = egui::pos2(700.0, 450.0);
+        paint(&mut editor, &ctx, vec![egui::Event::PointerMoved(empty)]);
+        for _ in 0..2 {
+            paint(&mut editor, &ctx, vec![click(empty, Primary, true)]);
+            paint(&mut editor, &ctx, vec![click(empty, Primary, false)]);
+        }
+        assert!(in_view(&paint(&mut editor, &ctx, vec![])), "not centred");
+
+        editor.arrange();
+        paint(&mut editor, &ctx, vec![]);
+        assert!(in_view(&paint(&mut editor, &ctx, vec![])));
     }
 
     #[test]
