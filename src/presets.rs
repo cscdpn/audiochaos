@@ -3,11 +3,12 @@
 use crate::patch::Patch;
 
 /// In the same JSON format as saved patches. The first one is the default.
-const PRESETS: [(&str, &str); 4] = [
+const PRESETS: [(&str, &str); 5] = [
     ("chaos", include_str!("../presets/chaos.json")),
     ("bass", include_str!("../presets/bass.json")),
     ("groovygroove", include_str!("../presets/groovygroove.json")),
     ("keys", include_str!("../presets/keys.json")),
+    ("chords", include_str!("../presets/chords.json")),
 ];
 
 pub fn names() -> impl Iterator<Item = &'static str> {
@@ -78,6 +79,44 @@ mod tests {
             rms(&g.render(out, master::OUT, SR as usize)) > 0.05,
             "pad 1"
         );
+    }
+
+    #[test]
+    fn chords_play_every_note_and_fade_out() {
+        use crate::midi::Parser;
+        let context = Context::new(SR);
+        let (mut g, out) = get("chords").unwrap().build(&context).unwrap();
+        assert!(rms(&g.render(out, master::OUT, SR as usize)) < 1e-3);
+        let mut parser = Parser::default();
+        parser.handle(&[0x90, 60, 100], &context.midi);
+        let one = rms(&g.render(out, master::OUT, SR as usize));
+        for note in [64, 67] {
+            parser.handle(&[0x90, note, 100], &context.midi);
+        }
+        let three = rms(&g.render(out, master::OUT, SR as usize));
+        assert!(one > 0.02, "one note {one}");
+        assert!(
+            three > 1.3 * one,
+            "a chord {three} is no louder than a note {one}"
+        );
+        // One voice per note, the fourth silent.
+        let voice = |g: &mut crate::engine::graph::Graph, v: usize| {
+            let vca = g
+                .nodes()
+                .find(|&n| g.name(n) == format!("vca {v}"))
+                .unwrap();
+            rms(&g.render(vca, crate::modules::vca::OUT, 4800))
+        };
+        for v in 1..=3 {
+            assert!(voice(&mut g, v) > 0.1, "voice {v}");
+        }
+        assert!(voice(&mut g, 4) < 1e-6, "voice 4");
+        for note in [60, 64, 67] {
+            parser.handle(&[0x80, note, 0], &context.midi);
+        }
+        // The release lasts 0.8 s.
+        g.render(out, master::OUT, SR as usize);
+        assert!(rms(&g.render(out, master::OUT, SR as usize / 10)) < 1e-3);
     }
 
     #[test]

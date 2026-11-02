@@ -44,7 +44,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
 };
 
 /// The pitch bend range, as on most synths.
-const BEND_SEMITONES: f32 = 2.0;
+pub(crate) const BEND_SEMITONES: f32 = 2.0;
 
 /// A MIDI controller as voltages: the keyboard's pitch, gate and velocity,
 /// a gate per pad, and the knobs (0..1).
@@ -77,6 +77,13 @@ fn octave() -> f32 {
     1.0 / (freq.max / freq.min).log2()
 }
 
+/// The CV that moves an oscillator's `freq cv` by this many semitones from
+/// its knob, the knob being the pitch of middle C.
+pub(crate) fn pitch_cv(note: u8, bend: f32) -> f32 {
+    let semitones = f32::from(note) - 60.0 + bend * BEND_SEMITONES;
+    semitones / 12.0 * octave()
+}
+
 impl Module for Midi {
     fn info(&self) -> &'static ModuleInfo {
         &INFO
@@ -86,10 +93,10 @@ impl Module for Midi {
         let (keyboard, rest) = outputs.split_at_mut(OUT_FIRST_PAD);
         let (pads, knobs) = rest.split_at_mut(PADS);
 
-        let semitones = f32::from(self.state.note()) - 60.0;
+        let note = self.state.note();
         self.bend.set(self.state.bend());
         for s in keyboard[OUT_PITCH].iter_mut() {
-            *s = (semitones + self.bend.tick() * BEND_SEMITONES) / 12.0 * octave();
+            *s = pitch_cv(note, self.bend.tick());
         }
         let gate = if self.state.gate() { 1.0 } else { 0.0 };
         keyboard[OUT_GATE].fill(gate);

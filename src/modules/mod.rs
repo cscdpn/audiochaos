@@ -18,6 +18,7 @@ pub mod mixer;
 pub mod noise;
 pub mod oscillator;
 pub mod phaser;
+pub mod poly;
 pub mod sample_hold;
 pub mod sampler;
 pub mod sequencer;
@@ -48,8 +49,9 @@ impl Context {
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 21] = [
+pub const KINDS: [&ModuleInfo; 22] = [
     &midi::INFO,
+    &poly::INFO,
     &clock::INFO,
     &sequencer::INFO,
     &lfo::INFO,
@@ -78,6 +80,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
     let sr = context.sample_rate;
     let module: Box<dyn Module> = match kind {
         "midi" => Box::new(midi::Midi::new(Arc::clone(&context.midi), sr)),
+        "poly" => Box::new(poly::Poly::new(Arc::clone(&context.midi), sr)),
         "clock" => Box::new(clock::Clock::new(sr)),
         "seq" => Box::new(sequencer::Sequencer::new(sr)),
         "lfo" => Box::new(lfo::Lfo::new(sr)),

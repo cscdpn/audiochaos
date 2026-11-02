@@ -11,7 +11,8 @@ oscillators frequency-modulating each other, folded, crushed and fed back
 through the delay, with random voltages retuning them. `just run bass`
 starts on a plain sequenced bassline instead, a calm base to patch from, and
 `just run groovygroove` on a groovier one. `just run keys` is played from a
-MIDI controller (see [MIDI controllers](#midi-controllers)).
+MIDI controller (see [MIDI controllers](#midi-controllers)), and `just run
+chords` too, four notes at once (see [Chords](#chords)).
 
 ### Graphical editor
 
@@ -128,11 +129,24 @@ Akai MPK mini mk2, which sends everything on channel 1:
 On Linux, MIDI needs the ALSA sequencer: if the status bar says "no MIDI",
 load it with `sudo modprobe snd-seq`.
 
+### Chords
+
+A `poly` module plays up to four notes at once: `pitch`, `gate` and
+`velocity` for each of four voices. Patch one voice per chain, an `osc` for
+the pitch, an `adsr` envelope for the gate, a `vca` with `gain` at 0 opened
+by the envelope on its `mod`, then a `mix` to bring the voices together.
+`just run chords` is that patch, through a filter and a chorus.
+
+Each new note takes a free voice, the one released longest ago so the
+others' release tails ring on, or else steals the oldest note, which then
+glides to the new pitch without a new attack. The pitch bend moves every
+voice. A MIDI controller and the computer keyboard share the four voices.
+
 ### Computer keyboard
 
 In the editor, the two bottom letter rows play one octave from middle C, as
-`midi` modules' `pitch`, `gate` and `velocity` (always 100), alongside any
-MIDI controller: white keys on the lower row, black keys on the row above.
+`midi` and `poly` modules' `pitch`, `gate` and `velocity` (always 100),
+alongside any MIDI controller: white keys on the lower row, black keys on the row above.
 
 ```
 QWERTY:   S D   G H J         AZERTY:   S D   G H J
@@ -192,6 +206,7 @@ Module types, as patches and the editor's palette name them:
 | Type | Does |
 |---|---|
 | midi | a MIDI controller's keyboard, pads and knobs as voltages |
+| poly | the keyboard as four voices, for chords |
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
