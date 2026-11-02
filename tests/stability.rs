@@ -97,6 +97,8 @@ fn every_module_stays_finite_with_any_knobs() {
                 g.process();
                 let finite = g.outputs(node).iter().flatten().all(|s| s.is_finite());
                 assert!(finite, "{} went non-finite, seed {seed}", info.name);
+                let led = g.led(node).unwrap_or(0.0);
+                assert!((0.0..=1.0).contains(&led), "{} light at {led}", info.name);
             }
         }
     }

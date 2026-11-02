@@ -33,6 +33,10 @@ the knobs.
   current patch, block positions included.
 - The computer keyboard plays the `midi` modules, without a MIDI controller
   (see [below](#computer-keyboard)).
+- A red light beside a block's title blinks at the pace the module actually
+  runs at, CV and clock included, which the slider does not show: `lfo` and
+  the modulation effects glow with their LFO (the univibe with its lamp),
+  `delay` flashes on each echo, `clock` on each beat, `seq` with its gate.
 - **● Rec** records what you hear (see [Recording](#recording)).
 
 ### Terminal UI
@@ -180,6 +184,7 @@ Module types, as patches and the editor's palette name them:
 | Type | Does |
 |---|---|
 | midi | a MIDI controller's keyboard, pads and knobs as voltages |
+| clock | a tempo, with a Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
 | noise | white noise |
@@ -212,6 +217,25 @@ are already a patch away:
 - Ring modulation: `osc` into a VCA's `mod`.
 - Auto-wah: `lfo` into the `cutoff cv` of a `filter`, on its `bandpass`.
 
+### Tempo
+
+`delay`, `lfo` and `seq` have a `clock` input. With a cable in it, they follow
+the clock and ignore their `time` or `rate` knob, CV included:
+
+- `delay`: the time between the last two ticks is the delay time, up to 2 s.
+  Until two ticks have come, the knob still sets it. A change of tempo glides.
+- `lfo`: one cycle per tick, restarting on each, so it stays in time.
+- `seq`: each tick moves to the next step, starting from the first, and `gate`
+  follows the clock.
+
+A tick is a rise above 0, so any gate or square clocks them. A `clock` block
+gives one tempo to all of them: for echoes on the dotted eighth over a
+sequence in eighths, patch its `dotted 8th` into the delay's `clock` and its
+`8th` into the sequencer's. Click its **Tap** button in rhythm to set the
+tempo: the last five taps are averaged, and a pause of three seconds starts
+over. A MIDI pad patched into the delay's `clock` is a tap tempo too: the
+delay takes the time between the last two hits.
+
 ## Design notes
 
 - Audio and control signals share the same `f32` buffers, like voltages in a
@@ -239,6 +263,15 @@ are already a patch away:
 - MIDI input follows it too: midir's threads decode messages into atomics
   that `midi` modules read once per block, so a burst of knob turns never
   stalls the audio.
+- Lights go the other way the same way: after each block, the engine stores
+  every module's brightness in an atomic per slot, and the editor reads them
+  when it draws, about 30 times a second while some block has a light. What
+  a light shows comes from inside the module, so it is the real pace, knob,
+  CV and clock together. Drawn 30 times a second, a light faster than about
+  15 Hz no longer blinks evenly.
+- A `clock` input changes how a module behaves only while a cable is in it:
+  the graph tells modules when an input gains or loses its last cable, since
+  an unplugged input reads the same zeros as a silent one.
 - Live recording follows the same rule: the audio thread copies samples into
   a second lock-free queue, and a writer thread empties it to disk. The queue
   holds a second of audio; if the disk stalls longer, samples are dropped and

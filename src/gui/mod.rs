@@ -3,6 +3,7 @@
 
 mod editor;
 mod keyboard;
+mod tap;
 
 use std::error::Error;
 use std::fs;
@@ -24,6 +25,8 @@ use keyboard::Keyboard;
 /// How often the window refreshes without input, to keep the audio error
 /// count and the recording time current.
 const REFRESH: Duration = Duration::from_millis(250);
+/// How often it refreshes while lights blink: fast enough to follow a beat.
+const LED_REFRESH: Duration = Duration::from_millis(33);
 
 /// Runs until the window is closed. `patch` is the one already playing; only
 /// its block positions are read. `status` is the first message shown.
@@ -65,7 +68,12 @@ struct GuiApp {
 
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        ui.ctx().request_repaint_after(REFRESH);
+        let refresh = if self.editor.has_leds() {
+            LED_REFRESH
+        } else {
+            REFRESH
+        };
+        ui.ctx().request_repaint_after(refresh);
         let playing = !ui.ctx().egui_wants_keyboard_input();
         ui.ctx().input(|input| {
             for event in &input.events {

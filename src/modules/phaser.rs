@@ -2,7 +2,7 @@ use std::f32::consts::TAU;
 
 use crate::engine::module::{Buffer, Module, ModuleInfo};
 use crate::engine::param::{ParamInfo, Scale};
-use crate::modules::dsp::{Allpass, allpass_coefficient};
+use crate::modules::dsp::{Allpass, allpass_coefficient, glow};
 
 pub const IN: usize = 0;
 
@@ -109,6 +109,10 @@ impl Module for Phaser {
             let mix = params[MIX][i];
             outputs[OUT][i] = (1.0 - mix) * x + mix * wet;
         }
+    }
+
+    fn led(&self) -> Option<f32> {
+        Some(glow(self.phase))
     }
 }
 

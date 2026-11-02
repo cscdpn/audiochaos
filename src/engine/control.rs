@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::fmt;
 use std::mem;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -88,6 +90,20 @@ impl SampleState {
     }
 }
 
+/// The modules' lights, by slot, written by the audio thread once per block
+/// and read by the UI whenever it draws: atomics, so neither waits for the
+/// other. A torn view across slots does not matter for lights.
+struct Leds([AtomicU32; MAX_MODULES]);
+
+/// Stored as the bits of an `f32`, NaN for no light.
+const NO_LED: f32 = f32::NAN;
+
+impl Default for Leds {
+    fn default() -> Self {
+        Self(std::array::from_fn(|_| AtomicU32::new(NO_LED.to_bits())))
+    }
+}
+
 /// The UI side. The graph itself lives on the audio thread, so the controller
 /// keeps a mirror of the patch for display, and only updates it once the
 /// matching command is queued, so the two never disagree.
@@ -99,9 +115,17 @@ pub struct Controller {
     /// In processing order.
     nodes: Vec<NodeState>,
     cables: CableSet,
+    leds: Arc<Leds>,
 }
 
 impl Controller {
+    /// How bright a module's light was at the end of the last block played,
+    /// if it has one. None before the first block.
+    pub fn led(&self, id: NodeId) -> Option<f32> {
+        let bits = self.leds.0[id.0].load(Ordering::Relaxed);
+        Some(f32::from_bits(bits)).filter(|b| !b.is_nan())
+    }
+
     /// The module feeding the speakers.
     pub fn output(&self) -> NodeId {
         self.output
@@ -289,6 +313,7 @@ pub struct Engine {
     commands: Consumer<Command>,
     retired: Producer<Retired>,
     position: usize,
+    leds: Arc<Leds>,
 }
 
 impl Engine {
@@ -297,6 +322,7 @@ impl Engine {
         let (producer, consumer) = RingBuffer::new(queue_capacity);
         let (retired_producer, retired_consumer) = RingBuffer::new(queue_capacity);
         let (nodes, cables) = mirror(&graph);
+        let leds = Arc::new(Leds::default());
         let controller = Controller {
             sample_rate: graph.sample_rate(),
             output,
@@ -304,6 +330,7 @@ impl Engine {
             retired: retired_consumer,
             nodes,
             cables,
+            leds: Arc::clone(&leds),
         };
         let engine = Self {
             graph: Box::new(graph),
@@ -311,6 +338,7 @@ impl Engine {
             commands: consumer,
             retired: retired_producer,
             position: BLOCK,
+            leds,
         };
         (engine, controller)
     }
@@ -319,11 +347,20 @@ impl Engine {
         if self.position == BLOCK {
             self.apply_commands();
             self.graph.process();
+            self.publish_leds();
             self.position = 0;
         }
         let sample = self.graph.output(self.output, 0)[self.position];
         self.position += 1;
         sample
+    }
+
+    /// Every slot, so a freed one goes dark.
+    fn publish_leds(&self) {
+        for (slot, led) in self.leds.0.iter().enumerate() {
+            let brightness = self.graph.led(NodeId(slot)).unwrap_or(NO_LED);
+            led.store(brightness.to_bits(), Ordering::Relaxed);
+        }
     }
 
     fn apply_commands(&mut self) {
@@ -420,6 +457,27 @@ mod tests {
         }
         engine.next_sample();
         assert!((engine.graph.param(out, master::VOLUME) - 0.1).abs() < 1e-6);
+    }
+
+    #[test]
+    fn lights_reach_the_controller_once_played() {
+        use crate::modules::lfo::Lfo;
+
+        let mut graph = Graph::new(SR);
+        let lfo = graph.add("lfo", Box::new(Lfo::new(SR)));
+        let out = graph.add("master", Box::new(Master));
+        let (mut engine, mut controller) = Engine::new(graph, out, 8);
+        assert_eq!(controller.led(lfo), None, "nothing played yet");
+        run_block(&mut engine);
+        assert!(
+            controller
+                .led(lfo)
+                .is_some_and(|b| (0.0..=1.0).contains(&b))
+        );
+        assert_eq!(controller.led(out), None, "the master has no light");
+        controller.remove(lfo).unwrap();
+        run_block(&mut engine);
+        assert_eq!(controller.led(lfo), None);
     }
 
     #[test]

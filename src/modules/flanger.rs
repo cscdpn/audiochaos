@@ -2,7 +2,7 @@ use std::f32::consts::TAU;
 
 use crate::engine::module::{Buffer, Module, ModuleInfo};
 use crate::engine::param::{ParamInfo, Scale};
-use crate::modules::dsp::DelayLine;
+use crate::modules::dsp::{DelayLine, glow};
 
 pub const IN: usize = 0;
 
@@ -104,6 +104,10 @@ impl Module for Flanger {
             let mix = params[MIX][i];
             outputs[OUT][i] = (1.0 - mix) * x + mix * wet;
         }
+    }
+
+    fn led(&self) -> Option<f32> {
+        Some(glow(self.phase))
     }
 }
 

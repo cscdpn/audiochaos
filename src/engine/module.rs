@@ -63,4 +63,18 @@ pub trait Module: Send {
     fn sample(&self) -> Option<&Sample> {
         None
     }
+
+    /// Tells the module whether signal input `input` has a cable, whenever
+    /// that changes, for modules that behave differently once plugged: an
+    /// unplugged input reads zeros, like a silent one. Must not allocate or
+    /// block.
+    fn set_plugged(&mut self, input: usize, plugged: bool) {
+        let _ = (input, plugged);
+    }
+
+    /// How bright the module's light is, 0..1, if it has one: a blink at the
+    /// pace it actually runs at, knob and CV together. Read once per block.
+    fn led(&self) -> Option<f32> {
+        None
+    }
 }

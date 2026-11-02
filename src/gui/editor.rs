@@ -6,17 +6,21 @@ use eframe::egui::{self, Color32, Pos2, Rect, Ui, Vec2};
 use egui_snarl::ui::{PinInfo, PinPlacement, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
 use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
+use super::tap::Tap;
 use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
 use crate::engine::module::ModuleInfo;
 use crate::engine::param::{ParamInfo, Scale};
 use crate::engine::sample::Sample;
-use crate::modules::{self, Context, master, sampler};
+use crate::modules::{self, Context, clock, master, sampler};
 use crate::patch::{self, Patch};
 
 const AUDIO_PIN: Color32 = Color32::from_rgb(0xe0, 0x6c, 0x3c);
 const CV_PIN: Color32 = Color32::from_rgb(0x4c, 0x9b, 0xd6);
 const SLIDER_WIDTH: f32 = 150.0;
+const LED_OFF: Color32 = Color32::from_rgb(0x40, 0x10, 0x10);
+const LED_ON: Color32 = Color32::from_rgb(0xff, 0x30, 0x20);
+const LED_RADIUS: f32 = 5.0;
 
 /// Layout: blocks stacked in columns, in processing order (sources first,
 /// master last), starting a new column past this height.
@@ -40,6 +44,8 @@ pub struct Editor {
     sizes: HashMap<BlockId, Vec2>,
     /// Set by `arrange`, so the next frame brings the blocks into view.
     show_origin: bool,
+    /// Each clock's Tap button.
+    taps: HashMap<NodeId, Tap>,
     pub(super) status: String,
 }
 
@@ -55,6 +61,7 @@ impl Editor {
             snarl: Snarl::new(),
             sizes: HashMap::new(),
             show_origin: false,
+            taps: HashMap::new(),
             status: String::new(),
         };
         editor.rebuild(positions);
@@ -142,6 +149,12 @@ impl Editor {
         patch
     }
 
+    /// Whether some block has a light, which needs frequent redraws.
+    pub fn has_leds(&self) -> bool {
+        let nodes = self.controller.nodes();
+        nodes.iter().any(|n| self.controller.led(n.id).is_some())
+    }
+
     pub fn show_graph(&mut self, ui: &mut Ui) {
         let mut viewer = Viewer {
             controller: &mut self.controller,
@@ -149,6 +162,7 @@ impl Editor {
             status: &mut self.status,
             sizes: &mut self.sizes,
             show_origin: &mut self.show_origin,
+            taps: &mut self.taps,
             view: ui.max_rect(),
         };
         SnarlWidget::new()
@@ -215,6 +229,15 @@ fn columns(sizes: impl IntoIterator<Item = Vec2>) -> Vec<Pos2> {
         .collect()
 }
 
+/// A round light, dark to bright red.
+fn led(brightness: f32, ui: &mut Ui) {
+    let size = egui::Vec2::splat(2.0 * LED_RADIUS);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let colour = LED_OFF.lerp_to_gamma(LED_ON, brightness.clamp(0.0, 1.0));
+    ui.painter()
+        .circle_filled(rect.center(), LED_RADIUS, colour);
+}
+
 /// A slider whose right-click menu resets it. Returns whether `value` changed.
 fn knob(param: &ParamInfo, value: &mut f32, ui: &mut Ui) -> bool {
     let slider = egui::Slider::new(value, param.min..=param.max)
@@ -243,6 +266,7 @@ struct Viewer<'a> {
     status: &'a mut String,
     sizes: &'a mut HashMap<BlockId, Vec2>,
     show_origin: &'a mut bool,
+    taps: &'a mut HashMap<NodeId, Tap>,
     /// Where the graph is drawn, on screen.
     view: Rect,
 }
@@ -275,6 +299,18 @@ impl Viewer<'_> {
                 .pick_file()
         {
             self.load_sample(id, &path.to_string_lossy());
+        }
+    }
+
+    /// Sets the clock's tempo from the rhythm of clicks.
+    fn show_tap_button(&mut self, id: NodeId, ui: &mut Ui) {
+        if ui.button("Tap").clicked() {
+            let now = ui.input(|i| i.time);
+            if let Some(bpm) = self.taps.entry(id).or_default().tap(now)
+                && let Err(e) = self.controller.set_param(id, clock::TEMPO, bpm)
+            {
+                *self.status = format!("tempo not changed: {e}");
+            }
         }
     }
 
@@ -328,6 +364,22 @@ impl Viewer<'_> {
 impl SnarlViewer<NodeId> for Viewer<'_> {
     fn title(&mut self, node: &NodeId) -> String {
         self.controller.node(*node).name.clone()
+    }
+
+    /// The title, then the light of modules that have one.
+    fn show_header(
+        &mut self,
+        block: BlockId,
+        _inputs: &[InPin],
+        _outputs: &[OutPin],
+        ui: &mut Ui,
+        snarl: &mut Snarl<NodeId>,
+    ) {
+        let id = snarl[block];
+        ui.label(self.title(&id));
+        if let Some(brightness) = self.controller.led(id) {
+            led(brightness, ui);
+        }
     }
 
     fn inputs(&mut self, node: &NodeId) -> usize {
@@ -411,6 +463,9 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
             }
             if info.name == sampler::INFO.name {
                 self.show_sample_button(id, sample.as_ref(), ui);
+            }
+            if info.name == clock::INFO.name {
+                self.show_tap_button(id, ui);
             }
         });
     }
@@ -534,6 +589,7 @@ mod tests {
             status: &mut editor.status,
             sizes: &mut editor.sizes,
             show_origin: &mut editor.show_origin,
+            taps: &mut editor.taps,
             view: Rect::ZERO,
         };
         f(&mut viewer, &mut editor.snarl);
@@ -806,13 +862,24 @@ mod tests {
         ctx: &egui::Context,
         events: Vec<egui::Event>,
     ) -> Vec<egui::Shape> {
-        let input = egui::RawInput {
+        paint_input(editor, ctx, window(events))
+    }
+
+    fn window(events: Vec<egui::Event>) -> egui::RawInput {
+        egui::RawInput {
             events,
             // The window's size: without one, egui makes the screen huge and
             // everything is in view.
             screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1400.0, 900.0))),
             ..Default::default()
-        };
+        }
+    }
+
+    fn paint_input(
+        editor: &mut Editor,
+        ctx: &egui::Context,
+        input: egui::RawInput,
+    ) -> Vec<egui::Shape> {
         let mut output = ctx.run_ui(input, |ui| editor.show_graph(ui));
         // No renderer consumes the font textures here, and egui insists they
         // are dropped explicitly.
@@ -1006,6 +1073,86 @@ mod tests {
         editor.arrange();
         paint(&mut editor, &ctx, vec![]);
         assert!(in_view(&paint(&mut editor, &ctx, vec![])));
+    }
+
+    #[test]
+    fn blocks_with_a_light_show_it_once_the_patch_plays() {
+        let patch = presets::get("chaos").unwrap();
+        let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
+        let (mut engine, controller) = Engine::new(graph, out, 1024);
+        let mut editor = Editor::new(controller, Context::new(48_000.0), &patch.positions);
+        let lights = |shapes: &[egui::Shape]| -> Vec<Rect> {
+            shapes
+                .iter()
+                .filter_map(|shape| match shape {
+                    // Every other circle is a pin; the view's zoom scales radii.
+                    egui::Shape::Circle(c) if c.fill != AUDIO_PIN && c.fill != CV_PIN => {
+                        Some(shape.visual_bounding_rect())
+                    }
+                    _ => None,
+                })
+                .collect()
+        };
+        let ctx = egui::Context::default();
+        paint(&mut editor, &ctx, vec![]);
+        assert!(lights(&paint(&mut editor, &ctx, vec![])).is_empty());
+        assert!(!editor.has_leds());
+
+        for _ in 0..crate::engine::module::BLOCK {
+            engine.next_sample();
+        }
+        let shapes = paint(&mut editor, &ctx, vec![]);
+        let lit: Vec<_> = editor
+            .controller
+            .nodes()
+            .iter()
+            .filter(|n| editor.controller.led(n.id).is_some())
+            .map(|n| n.name.clone())
+            .collect();
+        assert!(lit.contains(&"delay".to_string()), "{lit:?}");
+        assert!(editor.has_leds());
+        let lights = lights(&shapes);
+        assert_eq!(lights.len(), lit.len());
+        // Each beside its block's title, whose glyphs may be shorter than it.
+        for name in &lit {
+            let title = text_at(&shapes, name).expand2(egui::vec2(0.0, LED_RADIUS));
+            let beside =
+                |l: &Rect| l.left() > title.right() && title.y_range().contains(l.center().y);
+            assert!(lights.iter().any(beside), "{name}");
+        }
+    }
+
+    #[test]
+    fn tapping_sets_the_clock_tempo() {
+        use egui::PointerButton::Primary;
+
+        let mut editor = editor("bass");
+        with_viewer(&mut editor, |viewer, snarl| {
+            viewer.add("clock", egui::pos2(0.0, 0.0), snarl);
+        });
+        let id = module(&editor, "clock");
+        let ctx = egui::Context::default();
+        paint(&mut editor, &ctx, vec![]);
+        // Away from the blocks it was dropped on.
+        editor.arrange();
+        paint(&mut editor, &ctx, vec![]);
+        let button = text_at(&paint(&mut editor, &ctx, vec![]), "Tap").center();
+        // Clicks 0.4 s apart: 150 BPM.
+        for time in [10.0, 10.4, 10.8] {
+            let at = |events| egui::RawInput {
+                time: Some(time),
+                ..window(events)
+            };
+            paint_input(
+                &mut editor,
+                &ctx,
+                at(vec![egui::Event::PointerMoved(button)]),
+            );
+            paint_input(&mut editor, &ctx, at(vec![click(button, Primary, true)]));
+            paint_input(&mut editor, &ctx, at(vec![click(button, Primary, false)]));
+        }
+        let tempo = editor.controller.node(id).params[clock::TEMPO];
+        assert!((tempo - 150.0).abs() < 1.0, "{tempo}");
     }
 
     #[test]

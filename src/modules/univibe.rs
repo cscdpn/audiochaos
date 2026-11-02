@@ -114,6 +114,11 @@ impl Module for Univibe {
             outputs[OUT][i] = (1.0 - mix) * x + mix * wet;
         }
     }
+
+    /// The lamp itself, lag and all.
+    fn led(&self) -> Option<f32> {
+        Some(self.lamp)
+    }
 }
 
 #[cfg(test)]

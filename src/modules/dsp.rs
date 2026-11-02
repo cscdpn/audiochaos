@@ -1,6 +1,6 @@
-//! Building blocks shared by the effects.
+//! Building blocks shared by modules.
 
-use std::f32::consts::PI;
+use std::f32::consts::{PI, TAU};
 
 /// A delay line with a fractional, interpolated read position, so modulating
 /// the delay bends the pitch like tape.
@@ -59,6 +59,51 @@ pub fn allpass_coefficient(freq: f32, sample_rate: f32) -> f32 {
     (t - 1.0) / (t + 1.0)
 }
 
+/// Follows a clock signal, like the clock input of a hardware delay: its
+/// tempo is the time between the last two rising edges, kept when the clock
+/// stops.
+#[derive(Default)]
+pub struct ClockIn {
+    last: f32,
+    /// Samples since the last rising edge, once there has been one.
+    since: Option<u32>,
+    period: Option<u32>,
+}
+
+impl ClockIn {
+    /// Reads one sample of the clock. Returns whether it is a rising edge.
+    pub fn tick(&mut self, x: f32) -> bool {
+        // Like `s&h`'s trigger: an LFO's square clocks as well as a gate.
+        let rising = self.last <= 0.0 && x > 0.0;
+        self.last = x;
+        self.since = self.since.map(|s| s.saturating_add(1));
+        if rising {
+            if self.since.is_some() {
+                self.period = self.since;
+            }
+            self.since = Some(0);
+        }
+        rising
+    }
+
+    /// Samples between the last two rising edges, once two have come.
+    pub fn period(&self) -> Option<u32> {
+        self.period
+    }
+}
+
+/// A light that flashes at the start of each cycle and fades out, for
+/// modules that repeat: still visible when the screen happens to be drawn
+/// late in the cycle. `phase` goes 0..1 over a cycle.
+pub fn flash(phase: f32) -> f32 {
+    (1.0 - phase).powi(3)
+}
+
+/// A light that follows a sine LFO at `phase` (0..1), from off to full.
+pub fn glow(phase: f32) -> f32 {
+    0.5 + 0.5 * (TAU * phase).sin()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -113,6 +158,55 @@ mod tests {
             let (level, _) = response(coefficient, freq);
             assert!((level - 1.0).abs() < 0.01, "{level} at {freq} Hz");
         }
+    }
+
+    fn clock(edges_every: usize, samples: usize) -> ClockIn {
+        let mut clock = ClockIn::default();
+        for n in 0..samples {
+            clock.tick(if n % edges_every < edges_every / 2 {
+                1.0
+            } else {
+                0.0
+            });
+        }
+        clock
+    }
+
+    #[test]
+    fn a_clock_needs_two_edges_for_a_tempo() {
+        assert_eq!(clock(100, 50).period(), None);
+        assert_eq!(clock(100, 101).period(), Some(100));
+    }
+
+    #[test]
+    fn a_clock_keeps_its_last_tempo_when_it_stops() {
+        let mut clock = clock(100, 1000);
+        for _ in 0..10_000 {
+            clock.tick(0.0);
+        }
+        assert_eq!(clock.period(), Some(100));
+        clock.tick(1.0);
+        assert_eq!(clock.period(), Some(100 + 10_000));
+    }
+
+    #[test]
+    fn a_clock_edge_is_a_rise_above_zero() {
+        let mut clock = ClockIn::default();
+        let edges: Vec<bool> = [-1.0, 1.0, 1.0, 0.0, 0.5, -1.0, 0.0]
+            .iter()
+            .map(|&x| clock.tick(x))
+            .collect();
+        assert_eq!(edges, [false, true, false, false, true, false, false]);
+    }
+
+    #[test]
+    fn lights_stay_between_off_and_full() {
+        for phase in [0.0, 0.25, 0.5, 0.75, 0.999] {
+            assert!((0.0..=1.0).contains(&flash(phase)), "{phase}");
+            assert!((0.0..=1.0).contains(&glow(phase)), "{phase}");
+        }
+        assert_eq!(flash(0.0), 1.0);
+        assert_eq!(glow(0.25), 1.0);
     }
 
     #[test]

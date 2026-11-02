@@ -18,7 +18,7 @@ pub const MAX_MODULES: usize = 64;
 /// state forever; with the rails every module only ever sees finite input.
 pub const RAIL: f32 = 10.0;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct NodeId(pub(crate) usize);
 
 /// `to_port` counts signal inputs first, then one CV input per parameter
@@ -212,17 +212,44 @@ impl Graph {
         let node = self.slots[id.0].take()?;
         self.order.retain(|&n| n != id);
         self.cables.remove_node(id);
+        // Its cables may have been the only ones into others' inputs.
+        for k in 0..self.order.len() {
+            let other = self.order[k];
+            for input in 0..self.info(other).inputs.len() {
+                self.tell_plugged(other, input);
+            }
+        }
         Some(node)
     }
 
     pub fn connect(&mut self, cable: Cable) -> Result<(), GraphError> {
         let from = self.info(cable.from);
         let to = self.info(cable.to);
-        self.cables.insert(cable, from, to)
+        self.cables.insert(cable, from, to)?;
+        self.tell_plugged(cable.to, cable.to_port);
+        Ok(())
     }
 
     pub fn disconnect(&mut self, cable: Cable) -> bool {
-        self.cables.remove(cable)
+        let removed = self.cables.remove(cable);
+        if removed {
+            self.tell_plugged(cable.to, cable.to_port);
+        }
+        removed
+    }
+
+    /// Tells a module whether one of its inputs has a cable. CV inputs are
+    /// the graph's business, not the module's.
+    fn tell_plugged(&mut self, node: NodeId, port: usize) {
+        if port >= self.info(node).inputs.len() {
+            return;
+        }
+        let plugged = self
+            .cables
+            .as_slice()
+            .iter()
+            .any(|c| c.to == node && c.to_port == port);
+        self.node_mut(node).module.set_plugged(port, plugged);
     }
 
     fn node(&self, id: NodeId) -> &Node {
@@ -263,6 +290,12 @@ impl Graph {
 
     pub fn sample(&self, node: NodeId) -> Option<&Sample> {
         self.node(node).module.sample()
+    }
+
+    /// The light of the module in this slot, if there is a module and it
+    /// has one.
+    pub fn led(&self, node: NodeId) -> Option<f32> {
+        self.slots[node.0].as_ref()?.module.led()
     }
 
     /// The modules, in processing order.
@@ -402,6 +435,32 @@ mod tests {
         }
     }
 
+    /// Outputs 1 while its input has a cable, 0 otherwise.
+    #[derive(Default)]
+    struct Plugged(bool);
+    static PLUGGED: ModuleInfo = ModuleInfo {
+        name: "plugged",
+        inputs: &["in"],
+        outputs: &["out"],
+        output_details: &[""],
+        params: &[],
+    };
+    impl Module for Plugged {
+        fn info(&self) -> &'static ModuleInfo {
+            &PLUGGED
+        }
+        fn process(&mut self, _: &[Buffer], _: &[Buffer], outputs: &mut [Buffer]) {
+            outputs[0].fill(if self.0 { 1.0 } else { 0.0 });
+        }
+        fn set_plugged(&mut self, input: usize, plugged: bool) {
+            assert_eq!(input, 0);
+            self.0 = plugged;
+        }
+        fn led(&self) -> Option<f32> {
+            Some(0.5)
+        }
+    }
+
     fn cable(from: NodeId, to: NodeId) -> Cable {
         Cable {
             from,
@@ -413,6 +472,34 @@ mod tests {
 
     fn close(a: f32, b: f32) -> bool {
         (a - b).abs() < 1e-4
+    }
+
+    #[test]
+    fn modules_know_which_inputs_have_cables() {
+        let mut g = Graph::new(SR);
+        let a = g.add("a", Box::new(Emit(0.0)));
+        let b = g.add("b", Box::new(Emit(0.0)));
+        let p = g.add("p", Box::new(Plugged::default()));
+        let plugged = |g: &mut Graph| g.render(p, 0, 1)[0] == 1.0;
+        assert!(!plugged(&mut g));
+        g.connect(cable(a, p)).unwrap();
+        g.connect(cable(b, p)).unwrap();
+        assert!(plugged(&mut g));
+        g.disconnect(cable(a, p));
+        assert!(plugged(&mut g), "b still plugs into it");
+        g.remove(b);
+        assert!(!plugged(&mut g));
+    }
+
+    #[test]
+    fn lights_come_from_the_module_in_the_slot() {
+        let mut g = Graph::new(SR);
+        let lit = g.add("lit", Box::new(Plugged::default()));
+        let dark = g.add("dark", Box::new(Emit(0.0)));
+        assert_eq!(g.led(lit), Some(0.5));
+        assert_eq!(g.led(dark), None);
+        g.remove(lit);
+        assert_eq!(g.led(lit), None);
     }
 
     #[test]

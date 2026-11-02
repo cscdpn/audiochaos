@@ -3,6 +3,7 @@
 
 pub mod atten;
 pub mod chorus;
+pub mod clock;
 pub mod crusher;
 pub mod delay;
 pub mod distortion;
@@ -45,8 +46,9 @@ impl Context {
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 18] = [
+pub const KINDS: [&ModuleInfo; 19] = [
     &midi::INFO,
+    &clock::INFO,
     &sequencer::INFO,
     &lfo::INFO,
     &noise::INFO,
@@ -72,6 +74,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
     let sr = context.sample_rate;
     let module: Box<dyn Module> = match kind {
         "midi" => Box::new(midi::Midi::new(Arc::clone(&context.midi), sr)),
+        "clock" => Box::new(clock::Clock::new(sr)),
         "seq" => Box::new(sequencer::Sequencer::new(sr)),
         "lfo" => Box::new(lfo::Lfo::new(sr)),
         "noise" => Box::new(noise::Noise::new(seed)),
@@ -169,7 +172,8 @@ pub(crate) mod test_util {
         (signal.iter().map(|s| s * s).sum::<f32>() / signal.len() as f32).sqrt()
     }
 
-    /// Feeds a whole signal through a module with a single input.
+    /// Feeds a whole signal through a module's first input, its other inputs
+    /// silent.
     pub fn process_signal(
         module: &mut dyn Module,
         signal: &[f32],
@@ -177,11 +181,12 @@ pub(crate) mod test_util {
         port: usize,
     ) -> Vec<f32> {
         let params: Vec<Buffer> = params.iter().map(|&v| [v; BLOCK]).collect();
+        let mut inputs = vec![[0.0; BLOCK]; module.info().inputs.len()];
         let mut outputs = vec![[0.0; BLOCK]; module.info().outputs.len()];
         let mut out = Vec::with_capacity(signal.len());
         for chunk in signal.chunks_exact(BLOCK) {
-            let input: Buffer = chunk.try_into().unwrap();
-            module.process(&[input], &params, &mut outputs);
+            inputs[0] = chunk.try_into().unwrap();
+            module.process(&inputs, &params, &mut outputs);
             out.extend_from_slice(&outputs[port]);
         }
         out
