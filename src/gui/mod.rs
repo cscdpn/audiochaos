@@ -3,7 +3,6 @@
 
 mod editor;
 mod keyboard;
-mod tap;
 
 use std::error::Error;
 use std::fs;

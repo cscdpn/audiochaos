@@ -6,12 +6,12 @@ use eframe::egui::{self, Color32, Pos2, Rect, Ui, Vec2};
 use egui_snarl::ui::{PinInfo, PinPlacement, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
 use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
-use super::tap::Tap;
 use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
 use crate::engine::module::ModuleInfo;
 use crate::engine::param::{ParamInfo, Scale};
 use crate::engine::sample::Sample;
+use crate::modules::clock::Tap;
 use crate::modules::{self, Context, clock, master, sampler};
 use crate::patch::{self, Patch};
 
@@ -302,9 +302,18 @@ impl Viewer<'_> {
         }
     }
 
-    /// Sets the clock's tempo from the rhythm of clicks.
+    /// Sets the clock's tempo from the rhythm of clicks, unless its `tap`
+    /// input does, which overrides the knob.
     fn show_tap_button(&mut self, id: NodeId, ui: &mut Ui) {
-        if ui.button("Tap").clicked() {
+        let tap_plugged = self
+            .controller
+            .cables()
+            .iter()
+            .any(|c| c.to == id && c.to_port == clock::IN_TAP);
+        let button = ui
+            .add_enabled(!tap_plugged, egui::Button::new("Tap"))
+            .on_disabled_hover_text("The tap input sets the tempo");
+        if button.clicked() {
             let now = ui.input(|i| i.time);
             if let Some(bpm) = self.taps.entry(id).or_default().tap(now)
                 && let Err(e) = self.controller.set_param(id, clock::TEMPO, bpm)
@@ -1138,21 +1147,36 @@ mod tests {
         paint(&mut editor, &ctx, vec![]);
         let button = text_at(&paint(&mut editor, &ctx, vec![]), "Tap").center();
         // Clicks 0.4 s apart: 150 BPM.
-        for time in [10.0, 10.4, 10.8] {
-            let at = |events| egui::RawInput {
-                time: Some(time),
-                ..window(events)
-            };
-            paint_input(
-                &mut editor,
-                &ctx,
-                at(vec![egui::Event::PointerMoved(button)]),
-            );
-            paint_input(&mut editor, &ctx, at(vec![click(button, Primary, true)]));
-            paint_input(&mut editor, &ctx, at(vec![click(button, Primary, false)]));
-        }
-        let tempo = editor.controller.node(id).params[clock::TEMPO];
+        let tap_three_times = |editor: &mut Editor, start: f64| {
+            for time in [start, start + 0.4, start + 0.8] {
+                let at = |events| egui::RawInput {
+                    time: Some(time),
+                    ..window(events)
+                };
+                paint_input(editor, &ctx, at(vec![egui::Event::PointerMoved(button)]));
+                paint_input(editor, &ctx, at(vec![click(button, Primary, true)]));
+                paint_input(editor, &ctx, at(vec![click(button, Primary, false)]));
+            }
+            editor.controller.node(id).params[clock::TEMPO]
+        };
+        let tempo = tap_three_times(&mut editor, 10.0);
         assert!((tempo - 150.0).abs() < 1.0, "{tempo}");
+
+        // A pad in the tap input sets the tempo; the button would change a
+        // knob that no longer counts.
+        let gate = OutPinId {
+            node: block_of(&editor, "seq"),
+            output: crate::modules::sequencer::OUT_GATE,
+        };
+        let tap = InPinId {
+            node: block_of(&editor, "clock"),
+            input: clock::IN_TAP,
+        };
+        with_viewer(&mut editor, |viewer, snarl| {
+            viewer.connect(&snarl.out_pin(gate), &snarl.in_pin(tap), snarl);
+        });
+        editor.controller.set_param(id, clock::TEMPO, 90.0).unwrap();
+        assert_eq!(tap_three_times(&mut editor, 20.0), 90.0);
     }
 
     #[test]

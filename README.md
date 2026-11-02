@@ -184,7 +184,7 @@ Module types, as patches and the editor's palette name them:
 | Type | Does |
 |---|---|
 | midi | a MIDI controller's keyboard, pads and knobs as voltages |
-| clock | a tempo, with a Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
+| clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
 | noise | white noise |
@@ -231,10 +231,16 @@ the clock and ignore their `time` or `rate` knob, CV included:
 A tick is a rise above 0, so any gate or square clocks them. A `clock` block
 gives one tempo to all of them: for echoes on the dotted eighth over a
 sequence in eighths, patch its `dotted 8th` into the delay's `clock` and its
-`8th` into the sequencer's. Click its **Tap** button in rhythm to set the
-tempo: the last five taps are averaged, and a pause of three seconds starts
-over. A MIDI pad patched into the delay's `clock` is a tap tempo too: the
-delay takes the time between the last two hits.
+`8th` into the sequencer's.
+
+To tap the tempo, patch a MIDI pad into the clock's `tap` input and hit it
+in rhythm. The first hit starts a bar, the next ones set the tempo and pull
+the nearest beat onto each hit; the last five are averaged, and a pause of
+three seconds starts a new tempo. While `tap` has a cable, the tapped tempo
+replaces the `tempo` knob, and unplugging it hands the tempo back to the
+knob. Without a pad, click the **Tap** button in rhythm: it sets the knob,
+and is greyed out while `tap` has a cable. A pad straight into a delay's
+`clock` works too: the delay takes the time between the last two hits.
 
 ## Design notes
 
