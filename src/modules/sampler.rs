@@ -13,6 +13,7 @@ pub const LOOP: usize = 3;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "sampler",
+    description: "Plays a WAV file, or a slice of it, on each trigger.",
     inputs: &["trigger"],
     outputs: &["out"],
     output_details: &["the sound"],
@@ -26,6 +27,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 1.0,
             scale: Scale::Exponential,
             unit: "x",
+            help: "Playback rate: 1 as recorded, 2 an octave up.",
         },
         ParamInfo {
             name: "start",
@@ -34,6 +36,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.0,
             scale: Scale::Linear,
             unit: "",
+            help: "Where the slice starts, as a fraction of the file.",
         },
         ParamInfo {
             name: "length",
@@ -42,6 +45,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 1.0,
             scale: Scale::Exponential,
             unit: "",
+            help: "How long the slice is, as a fraction of the file.",
         },
         ParamInfo {
             name: "loop",
@@ -50,6 +54,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.0,
             scale: Scale::Linear,
             unit: "",
+            help: "Past halfway, repeats the slice for as long as it stays there.",
         },
     ],
 };

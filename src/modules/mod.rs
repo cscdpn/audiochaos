@@ -111,6 +111,16 @@ mod tests {
     }
 
     #[test]
+    fn every_module_and_knob_says_what_it_does() {
+        for info in KINDS {
+            assert!(!info.description.is_empty(), "{}", info.name);
+            for param in info.params {
+                assert!(!param.help.is_empty(), "{} {}", info.name, param.name);
+            }
+        }
+    }
+
+    #[test]
     fn every_output_has_details() {
         for info in KINDS {
             assert_eq!(

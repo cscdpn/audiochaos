@@ -15,6 +15,7 @@ pub const RATE: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "lfo",
+    description: "Slow sine, triangle, saw and square, to move other knobs. Follows `clock` when it has a cable.",
     inputs: &["clock"],
     outputs: &["sine", "triangle", "saw", "square"],
     output_details: &["±1", "±1", "±1", "±1"],
@@ -25,6 +26,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
         default: 1.0,
         scale: Scale::Exponential,
         unit: "Hz",
+        help: "Cycles per second. Ignored while `clock` has a cable.",
     }],
 };
 

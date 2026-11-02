@@ -15,6 +15,7 @@ const MAX_SECONDS: f32 = 2.0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "delay",
+    description: "Echoes, up to 2 s. Feedback above 1 screams instead of exploding.",
     inputs: &["in", "clock"],
     outputs: &["out"],
     output_details: &["input + echoes"],
@@ -26,6 +27,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.25,
             scale: Scale::Exponential,
             unit: "s",
+            help: "Time between echoes. Ignored while `clock` has a cable.",
         },
         ParamInfo {
             name: "feedback",
@@ -34,6 +36,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "How much of each echo comes back: above 1 it self-oscillates.",
         },
         ParamInfo {
             name: "mix",
@@ -42,6 +45,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "0 dry, 1 only the echoes.",
         },
     ],
 };

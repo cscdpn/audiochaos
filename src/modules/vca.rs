@@ -12,6 +12,7 @@ pub const GAIN: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "vca",
+    description: "Amplifier, out = in × (gain + mod): notes from an envelope, tremolo from an LFO, ring modulation from audio.",
     inputs: &["in", "mod"],
     outputs: &["out"],
     output_details: &["input × gain"],
@@ -22,6 +23,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
         default: 1.0,
         scale: Scale::Linear,
         unit: "",
+        help: "Gain with nothing in `mod`; at 0, `mod` alone opens it.",
     }],
 };
 

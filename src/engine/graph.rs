@@ -394,6 +394,7 @@ mod tests {
     struct Offset;
     static OFFSET: ModuleInfo = ModuleInfo {
         name: "offset",
+        description: "",
         inputs: &["in"],
         outputs: &["out"],
         output_details: &[""],
@@ -404,6 +405,7 @@ mod tests {
             default: 1.0,
             scale: Scale::Linear,
             unit: "",
+            help: "",
         }],
     };
     impl Module for Offset {
@@ -421,6 +423,7 @@ mod tests {
     struct Emit(f32);
     static EMIT: ModuleInfo = ModuleInfo {
         name: "emit",
+        description: "",
         inputs: &[],
         outputs: &["out"],
         output_details: &[""],
@@ -440,6 +443,7 @@ mod tests {
     struct Plugged(bool);
     static PLUGGED: ModuleInfo = ModuleInfo {
         name: "plugged",
+        description: "",
         inputs: &["in"],
         outputs: &["out"],
         output_details: &[""],

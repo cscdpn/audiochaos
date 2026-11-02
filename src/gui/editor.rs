@@ -245,7 +245,7 @@ fn knob(param: &ParamInfo, value: &mut f32, ui: &mut Ui) -> bool {
         .logarithmic(param.scale == Scale::Exponential)
         .custom_formatter(|v, _| param.format(v as f32));
     // Sliders only sense drags, and a menu opens on a click.
-    let response = ui.add(slider);
+    let response = ui.add(slider).on_hover_text(param.help);
     let mut changed = response.changed();
     response.interact(egui::Sense::click()).context_menu(|ui| {
         for (label, reset) in param.resets() {
@@ -385,7 +385,8 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         snarl: &mut Snarl<NodeId>,
     ) {
         let id = snarl[block];
-        ui.label(self.title(&id));
+        let description = self.controller.node(id).info.description;
+        ui.label(self.title(&id)).on_hover_text(description);
         if let Some(brightness) = self.controller.led(id) {
             led(brightness, ui);
         }
@@ -516,7 +517,11 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
             .iter()
             .filter(|i| i.name != master::INFO.name)
         {
-            if ui.button(info.name).clicked() {
+            if ui
+                .button(info.name)
+                .on_hover_text(info.description)
+                .clicked()
+            {
                 self.add(info.name, pos, snarl);
                 ui.close();
             }
@@ -1177,6 +1182,32 @@ mod tests {
         });
         editor.controller.set_param(id, clock::TEMPO, 90.0).unwrap();
         assert_eq!(tap_three_times(&mut editor, 20.0), 90.0);
+    }
+
+    #[test]
+    fn hovering_a_knob_says_what_it_does() {
+        let mut editor = editor("keys");
+        let param = &delay::INFO.params[delay::FEEDBACK];
+        let ctx = egui::Context::default();
+        paint(&mut editor, &ctx, vec![]);
+        let shapes = paint(&mut editor, &ctx, vec![]);
+        let name = text_at(&shapes, param.name);
+        let on_slider = egui::pos2(name.left() - 100.0, name.center().y);
+        let mut shown = false;
+        // Tooltips wait for the pointer to rest.
+        for n in 0..20 {
+            let events = match n {
+                0 => vec![egui::Event::PointerMoved(on_slider)],
+                _ => vec![],
+            };
+            let input = egui::RawInput {
+                time: Some(n as f64 * 0.1),
+                ..window(events)
+            };
+            let shapes = paint_input(&mut editor, &ctx, input);
+            shown |= texts(&shapes).iter().any(|(t, _)| t == param.help);
+        }
+        assert!(shown, "no tooltip");
     }
 
     #[test]

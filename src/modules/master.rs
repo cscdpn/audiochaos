@@ -9,6 +9,7 @@ pub const VOLUME: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "master",
+    description: "The output: volume and a soft limiter, the only thing the speakers hear.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["to the speakers"],
@@ -19,6 +20,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
         default: 0.5,
         scale: Scale::Linear,
         unit: "",
+        help: "Output level, before the soft limiter.",
     }],
 };
 

@@ -14,6 +14,7 @@ pub const RESONANCE: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "filter",
+    description: "Resonant filter, with lowpass, bandpass and highpass outputs.",
     inputs: &["in"],
     outputs: &["lowpass", "bandpass", "highpass"],
     output_details: &["lows", "mids", "highs"],
@@ -25,6 +26,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 1000.0,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "Where the filter starts cutting.",
         },
         ParamInfo {
             name: "resonance",
@@ -33,6 +35,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.2,
             scale: Scale::Linear,
             unit: "",
+            help: "Boost around the cutoff: near the top it whistles.",
         },
     ],
 };

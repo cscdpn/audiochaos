@@ -10,6 +10,7 @@ pub const FOLD: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "dist",
+    description: "Drive into clipping or wavefolding, from warm to wrecked.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["shaped input"],
@@ -21,6 +22,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 4.0,
             scale: Scale::Exponential,
             unit: "x",
+            help: "Gain before shaping: how hard the wave hits the shaper.",
         },
         ParamInfo {
             name: "fold",
@@ -29,6 +31,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.0,
             scale: Scale::Linear,
             unit: "",
+            help: "0 clips (squarer), 1 folds the wave back on itself (wilder).",
         },
     ],
 };

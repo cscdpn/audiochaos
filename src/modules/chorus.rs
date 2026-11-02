@@ -14,6 +14,7 @@ pub const MIX: usize = 2;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "chorus",
+    description: "Copies of the input, slightly delayed and swaying: a thicker, wider sound.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["input + voices"],
@@ -25,6 +26,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.8,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "How fast the voices sway.",
         },
         ParamInfo {
             name: "depth",
@@ -33,6 +35,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "How far the voices drift apart: lush, then seasick.",
         },
         ParamInfo {
             name: "mix",
@@ -41,6 +44,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "0 dry, 1 only the voices.",
         },
     ],
 };

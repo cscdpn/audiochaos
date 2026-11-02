@@ -13,6 +13,7 @@ pub const OUT_FIRST_KNOB: usize = OUT_FIRST_PAD + PADS;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "midi",
+    description: "A MIDI controller, or the computer keyboard, as voltages: keys, pads and knobs.",
     inputs: &[],
     outputs: &[
         "pitch", "gate", "velocity", "pad 1", "pad 2", "pad 3", "pad 4", "pad 5", "pad 6", "pad 7",

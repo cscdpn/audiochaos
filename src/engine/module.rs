@@ -12,6 +12,8 @@ pub struct ModuleInfo {
     /// The kind of module, as patches name it, and the default name of its
     /// instances.
     pub name: &'static str,
+    /// What the module is for, in a sentence, for the editor's tooltips.
+    pub description: &'static str,
     pub inputs: &'static [&'static str],
     /// Port names, as patches refer to them: renaming one breaks saved patches.
     pub outputs: &'static [&'static str],

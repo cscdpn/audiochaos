@@ -10,6 +10,7 @@ pub const DOWNSAMPLE: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "crush",
+    description: "Bitcrusher: fewer bits and a lower sample rate, for digital grit.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["crushed input"],
@@ -21,6 +22,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 16.0,
             scale: Scale::Linear,
             unit: "bit",
+            help: "Amplitude resolution: fewer bits, coarser steps.",
         },
         ParamInfo {
             name: "downsample",
@@ -29,6 +31,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 1.0,
             scale: Scale::Exponential,
             unit: "x",
+            help: "Holds each sample this many times: a lower sample rate, metallic aliasing.",
         },
     ],
 };

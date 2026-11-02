@@ -4,6 +4,7 @@ pub const OUT: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "noise",
+    description: "White noise: hiss for percussion, or random steps through `s&h`.",
     inputs: &[],
     outputs: &["white"],
     output_details: &["±1"],

@@ -18,6 +18,7 @@ const MAX_SECONDS: f32 = 0.02;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "flanger",
+    description: "A very short swept delay: a jet-like comb sweeping through the sound.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["input + sweep"],
@@ -29,6 +30,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.3,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "How fast the comb sweeps.",
         },
         ParamInfo {
             name: "depth",
@@ -37,6 +39,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.7,
             scale: Scale::Linear,
             unit: "",
+            help: "How far it sweeps around `time`.",
         },
         ParamInfo {
             name: "time",
@@ -45,6 +48,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.003,
             scale: Scale::Exponential,
             unit: "s",
+            help: "Base delay: shorter moves the comb up.",
         },
         ParamInfo {
             name: "feedback",
@@ -53,6 +57,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "Sharpens the comb: above 1 it sings, below 0 it sounds hollow.",
         },
         ParamInfo {
             name: "mix",
@@ -61,6 +66,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "0 dry, 1 only the delayed signal; 0.5 makes the deepest notches.",
         },
     ],
 };

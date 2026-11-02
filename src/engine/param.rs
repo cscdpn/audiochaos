@@ -27,6 +27,8 @@ pub struct ParamInfo {
     pub default: f32,
     pub scale: Scale,
     pub unit: &'static str,
+    /// What the knob does, for the editor's tooltip.
+    pub help: &'static str,
 }
 
 impl ParamInfo {
@@ -131,6 +133,7 @@ mod tests {
             default: min,
             scale,
             unit: "",
+            help: "",
         }
     }
 

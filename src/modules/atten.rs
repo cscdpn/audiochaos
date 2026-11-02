@@ -16,11 +16,13 @@ const fn gain(name: &'static str) -> ParamInfo {
         default: 1.0,
         scale: Scale::Linear,
         unit: "",
+        help: "How much of the input comes out; negative inverts it.",
     }
 }
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "atten",
+    description: "Three attenuverters: scale a modulation down, or invert it.",
     inputs: &["a", "b", "c"],
     outputs: &["a", "b", "c"],
     output_details: &["a × gain a", "b × gain b", "c × gain c"],

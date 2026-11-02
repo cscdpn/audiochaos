@@ -14,6 +14,7 @@ pub const TEMPO: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "clock",
+    description: "A tempo as gates, to keep delays, LFOs and sequencers in time. Tap it on `tap` or with the Tap button.",
     inputs: &["tap"],
     outputs: &["bar", "beat", "8th", "dotted 8th", "16th"],
     output_details: &[
@@ -30,6 +31,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
         default: 120.0,
         scale: Scale::Linear,
         unit: "BPM",
+        help: "Beats per minute. Ignored while `tap` has a cable.",
     }],
 };
 

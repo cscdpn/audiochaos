@@ -14,6 +14,7 @@ pub const MIX: usize = 2;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "univibe",
+    description: "A phaser driven by a lagging lamp: the lopsided throb of the 60s pedal.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["input + throb"],
@@ -25,6 +26,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 3.0,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "How fast the lamp pulses.",
         },
         ParamInfo {
             name: "intensity",
@@ -33,6 +35,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.7,
             scale: Scale::Linear,
             unit: "",
+            help: "How far the lamp sweeps the stages.",
         },
         ParamInfo {
             name: "mix",
@@ -41,6 +44,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "0 dry, 1 pure vibrato.",
         },
     ],
 };

@@ -16,6 +16,7 @@ pub const MIX: usize = 4;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "phaser",
+    description: "All-pass stages swept together: two notches moving through the sound.",
     inputs: &["in"],
     outputs: &["out"],
     output_details: &["input + sweep"],
@@ -27,6 +28,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "How fast the notches sweep.",
         },
         ParamInfo {
             name: "depth",
@@ -35,6 +37,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.7,
             scale: Scale::Linear,
             unit: "",
+            help: "How far the notches sweep around `freq`.",
         },
         ParamInfo {
             name: "freq",
@@ -43,6 +46,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 800.0,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "Where the notches sit at rest.",
         },
         ParamInfo {
             name: "feedback",
@@ -51,6 +55,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.4,
             scale: Scale::Linear,
             unit: "",
+            help: "Deepens the notches and raises the peaks: above 1 it sings.",
         },
         ParamInfo {
             name: "mix",
@@ -59,6 +64,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.5,
             scale: Scale::Linear,
             unit: "",
+            help: "0 dry, 1 only the shifted signal; 0.5 makes the deepest notches.",
         },
     ],
 };

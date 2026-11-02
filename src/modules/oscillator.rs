@@ -17,6 +17,7 @@ pub const FM_DEPTH: usize = 1;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "osc",
+    description: "Oscillator: sine, saw and square, with linear FM for metallic sounds.",
     inputs: &["fm"],
     outputs: &["sine", "saw", "square"],
     output_details: &["±1", "±1", "±1"],
@@ -28,6 +29,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 110.0,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "Pitch. With a MIDI `pitch` in `freq cv`, the pitch of middle C.",
         },
         ParamInfo {
             name: "fm depth",
@@ -36,6 +38,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 100.0,
             scale: Scale::Exponential,
             unit: "Hz",
+            help: "How far `fm` pushes the frequency; past the pitch itself it goes through zero and turns metallic.",
         },
     ],
 };

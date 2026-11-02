@@ -26,6 +26,7 @@ the knobs.
 - Right-click a wire to remove it, or a pin to remove all of its wires.
 - Ctrl+drag from a pin picks up its wires to move them to another pin;
   dropping them on nothing removes them.
+- Hover a slider, a block's title or a palette entry to see what it does.
 - Right-click a slider to reset it (see [below](#knobs-and-cv)).
 - The canvas pans and zooms with the mouse.
 - **Patch** menu: load a built-in preset, **Arrange blocks** into columns

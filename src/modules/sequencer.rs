@@ -25,11 +25,13 @@ const fn step_param(name: &'static str) -> ParamInfo {
         default: 0.0,
         scale: Scale::Linear,
         unit: "",
+        help: "This step's CV, ±1.",
     }
 }
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "seq",
+    description: "Eight-step CV sequencer, on its own clock or stepped by `clock`.",
     inputs: &["clock"],
     outputs: &["cv", "gate"],
     output_details: &["step, ±1", "0 or 1"],
@@ -41,6 +43,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 4.0,
             scale: Scale::Exponential,
             unit: "st/s",
+            help: "Steps per second. Ignored while `clock` has a cable.",
         },
         step_param("step 1"),
         step_param("step 2"),

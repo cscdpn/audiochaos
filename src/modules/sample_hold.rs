@@ -7,6 +7,7 @@ pub const OUT: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "s&h",
+    description: "Sample & hold: grabs `in` on each rising edge of `trigger` and holds it. Noise in, random steps out.",
     inputs: &["in", "trigger"],
     outputs: &["out"],
     output_details: &["held input"],
