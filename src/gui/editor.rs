@@ -152,10 +152,15 @@ impl Editor {
         patch
     }
 
-    /// Whether some block has a light, which needs frequent redraws.
-    pub fn has_leds(&self) -> bool {
-        let nodes = self.controller.nodes();
-        nodes.iter().any(|n| self.controller.led(n.id).is_some())
+    /// Whether some block shows a light or a modulation tick, which need
+    /// frequent redraws to follow the sound.
+    pub fn moves(&self) -> bool {
+        self.controller.nodes().iter().any(|n| {
+            self.controller.led(n.id).is_some()
+                || n.info.params.iter().enumerate().any(|(p, param)| {
+                    marked(param, n.params[p], self.controller.modulated(n.id, p)).is_some()
+                })
+        })
     }
 
     pub fn show_graph(&mut self, ui: &mut Ui) {
@@ -232,6 +237,13 @@ fn columns(sizes: impl IntoIterator<Item = Vec2>) -> Vec<Pos2> {
         .collect()
 }
 
+/// Where on its travel (0..1) a knob set to `value` gets a modulation tick,
+/// if its `modulated` value is far enough from it to show.
+fn marked(param: &ParamInfo, value: f32, modulated: Option<f32>) -> Option<f32> {
+    let position = param.to_normalized(modulated?);
+    ((position - param.to_normalized(value)).abs() > MARKER_MIN_GAP).then_some(position)
+}
+
 /// A tick across a slider's rail at `position`, 0..1 of its travel, in the
 /// colour of CV inputs. `slider` is the whole widget, rail first, then the
 /// value and name; the geometry follows egui's own slider.
@@ -268,17 +280,15 @@ fn led(brightness: f32, ui: &mut Ui) {
 /// takes the knob (`modulated`) when that is elsewhere. Returns whether
 /// `value` changed.
 fn knob(param: &ParamInfo, value: &mut f32, modulated: Option<f32>, ui: &mut Ui) -> bool {
-    let set = param.to_normalized(*value);
+    let mark = marked(param, *value, modulated);
     let slider = egui::Slider::new(value, param.min..=param.max)
         .text(param.name)
         .logarithmic(param.scale == Scale::Exponential)
         .custom_formatter(|v, _| param.format(v as f32));
     // Sliders only sense drags, and a menu opens on a click.
     let response = ui.add(slider).on_hover_text(param.help);
-    if let Some(modulated) = modulated.map(|m| param.to_normalized(m))
-        && (modulated - set).abs() > MARKER_MIN_GAP
-    {
-        mark_modulation(modulated, response.rect, ui);
+    if let Some(position) = mark {
+        mark_modulation(position, response.rect, ui);
     }
     let mut changed = response.changed();
     response.interact(egui::Sense::click()).context_menu(|ui| {
@@ -1145,7 +1155,7 @@ mod tests {
         let ctx = egui::Context::default();
         paint(&mut editor, &ctx, vec![]);
         assert!(lights(&paint(&mut editor, &ctx, vec![])).is_empty());
-        assert!(!editor.has_leds());
+        assert!(!editor.moves());
 
         for _ in 0..crate::engine::module::BLOCK {
             engine.next_sample();
@@ -1159,7 +1169,7 @@ mod tests {
             .map(|n| n.name.clone())
             .collect();
         assert!(lit.contains(&"delay".to_string()), "{lit:?}");
-        assert!(editor.has_leds());
+        assert!(editor.moves());
         let lights = lights(&shapes);
         assert_eq!(lights.len(), lit.len());
         // Each beside its block's title, whose glyphs may be shorter than it.
@@ -1323,9 +1333,7 @@ mod tests {
             .flat_map(|n| {
                 let c = &editor.controller;
                 n.info.params.iter().enumerate().filter(move |&(p, param)| {
-                    let set = param.to_normalized(n.params[p]);
-                    let actual = param.to_normalized(c.modulated(n.id, p).unwrap());
-                    (actual - set).abs() > MARKER_MIN_GAP
+                    marked(param, n.params[p], c.modulated(n.id, p)).is_some()
                 })
             })
             .count();
@@ -1334,6 +1342,30 @@ mod tests {
         paint(&mut editor, &ctx, vec![]);
         let shapes = paint(&mut editor, &ctx, vec![]);
         assert_eq!(marks(&shapes).len(), moved);
+    }
+
+    #[test]
+    fn a_modulated_knob_alone_keeps_the_editor_redrawing() {
+        // No module here has a light.
+        let patch = Patch::from_json(
+            r#"{ "version": 2, "modules": [
+                { "name": "noise", "type": "noise" },
+                { "name": "filter", "type": "filter" },
+                { "name": "master", "type": "master" }
+            ], "cables": [
+                { "from": "noise", "output": "white", "to": "filter", "input": "cutoff cv" },
+                { "from": "filter", "output": "lowpass", "to": "master", "input": "in" }
+            ] }"#,
+        )
+        .unwrap();
+        let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
+        let (mut engine, controller) = Engine::new(graph, out, 1024);
+        let editor = Editor::new(controller, Context::new(48_000.0), &patch.positions);
+        assert!(!editor.moves());
+        for _ in 0..crate::engine::module::BLOCK {
+            engine.next_sample();
+        }
+        assert!(editor.moves());
     }
 
     #[test]
