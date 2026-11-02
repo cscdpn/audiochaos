@@ -1,6 +1,7 @@
 //! The module library. Each module exposes its port and parameter indices as
 //! constants, so patches read as `oscillator::OUT_SAW` rather than `1`.
 
+pub mod adsr;
 pub mod atten;
 pub mod chorus;
 pub mod clock;
@@ -13,6 +14,7 @@ pub mod flanger;
 pub mod lfo;
 pub mod master;
 pub mod midi;
+pub mod mixer;
 pub mod noise;
 pub mod oscillator;
 pub mod phaser;
@@ -46,11 +48,12 @@ impl Context {
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 19] = [
+pub const KINDS: [&ModuleInfo; 21] = [
     &midi::INFO,
     &clock::INFO,
     &sequencer::INFO,
     &lfo::INFO,
+    &adsr::INFO,
     &noise::INFO,
     &sample_hold::INFO,
     &sampler::INFO,
@@ -65,6 +68,7 @@ pub const KINDS: [&ModuleInfo; 19] = [
     &phaser::INFO,
     &univibe::INFO,
     &vca::INFO,
+    &mixer::INFO,
     &master::INFO,
 ];
 
@@ -77,6 +81,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
         "clock" => Box::new(clock::Clock::new(sr)),
         "seq" => Box::new(sequencer::Sequencer::new(sr)),
         "lfo" => Box::new(lfo::Lfo::new(sr)),
+        "adsr" => Box::new(adsr::Adsr::new(sr)),
         "noise" => Box::new(noise::Noise::new(seed)),
         "s&h" => Box::new(sample_hold::SampleHold::new()),
         "sampler" => Box::new(sampler::Sampler::new(sr)),
@@ -91,6 +96,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
         "phaser" => Box::new(phaser::Phaser::new(sr)),
         "univibe" => Box::new(univibe::Univibe::new(sr)),
         "vca" => Box::new(vca::Vca),
+        "mix" => Box::new(mixer::Mixer),
         "master" => Box::new(master::Master),
         _ => return None,
     };

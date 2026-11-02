@@ -195,6 +195,7 @@ Module types, as patches and the editor's palette name them:
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
 | lfo | slow sine, triangle, saw and square |
+| adsr | envelope from a gate: attack, decay, sustain, release |
 | noise | white noise |
 | sampler | plays a slice of a WAV file, once or looping, at any speed |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
@@ -209,6 +210,7 @@ Module types, as patches and the editor's palette name them:
 | phaser | four all-pass stages swept together, two moving notches |
 | univibe | staggered stages swept by a lagging lamp: a lopsided throb |
 | vca | `out = in * (gain + mod)`, ring modulator when `mod` is audio |
+| mix | four inputs summed, each at its own level |
 | master | volume and soft limiter, the only thing the speakers hear |
 
 Some starting points for noise: patch an oscillator into its own `fm`, feed
