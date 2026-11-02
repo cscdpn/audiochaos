@@ -21,6 +21,9 @@ const SLIDER_WIDTH: f32 = 150.0;
 const LED_OFF: Color32 = Color32::from_rgb(0x40, 0x10, 0x10);
 const LED_ON: Color32 = Color32::from_rgb(0xff, 0x30, 0x20);
 const LED_RADIUS: f32 = 5.0;
+/// Closer than this to the knob, in knob travel, the modulation mark would
+/// only hide the handle.
+const MARKER_MIN_GAP: f32 = 0.01;
 
 /// Layout: blocks stacked in columns, in processing order (sources first,
 /// master last), starting a new column past this height.
@@ -229,6 +232,29 @@ fn columns(sizes: impl IntoIterator<Item = Vec2>) -> Vec<Pos2> {
         .collect()
 }
 
+/// A tick across a slider's rail at `position`, 0..1 of its travel, in the
+/// colour of CV inputs. `slider` is the whole widget, rail first, then the
+/// value and name; the geometry follows egui's own slider.
+fn mark_modulation(position: f32, slider: Rect, ui: &mut Ui) {
+    let height = ui.spacing().interact_size.y;
+    let handle_radius = match ui.visuals().handle_shape {
+        egui::style::HandleShape::Circle => height / 2.5,
+        egui::style::HandleShape::Rect { aspect_ratio } => height / 2.5 * aspect_ratio,
+    };
+    let rail = egui::Rangef::new(slider.left(), slider.left() + ui.spacing().slider_width);
+    let travel = rail.shrink(handle_radius);
+    let x = egui::lerp(travel.min..=travel.max, position.clamp(0.0, 1.0));
+    let y = slider.center().y;
+    let stroke = egui::Stroke::new(2.0, CV_PIN);
+    ui.painter().line_segment(
+        [
+            egui::pos2(x, y - height / 2.0),
+            egui::pos2(x, y + height / 2.0),
+        ],
+        stroke,
+    );
+}
+
 /// A round light, dark to bright red.
 fn led(brightness: f32, ui: &mut Ui) {
     let size = egui::Vec2::splat(2.0 * LED_RADIUS);
@@ -238,14 +264,22 @@ fn led(brightness: f32, ui: &mut Ui) {
         .circle_filled(rect.center(), LED_RADIUS, colour);
 }
 
-/// A slider whose right-click menu resets it. Returns whether `value` changed.
-fn knob(param: &ParamInfo, value: &mut f32, ui: &mut Ui) -> bool {
+/// A slider whose right-click menu resets it, marked where CV actually
+/// takes the knob (`modulated`) when that is elsewhere. Returns whether
+/// `value` changed.
+fn knob(param: &ParamInfo, value: &mut f32, modulated: Option<f32>, ui: &mut Ui) -> bool {
+    let set = param.to_normalized(*value);
     let slider = egui::Slider::new(value, param.min..=param.max)
         .text(param.name)
         .logarithmic(param.scale == Scale::Exponential)
         .custom_formatter(|v, _| param.format(v as f32));
     // Sliders only sense drags, and a menu opens on a click.
     let response = ui.add(slider).on_hover_text(param.help);
+    if let Some(modulated) = modulated.map(|m| param.to_normalized(m))
+        && (modulated - set).abs() > MARKER_MIN_GAP
+    {
+        mark_modulation(modulated, response.rect, ui);
+    }
     let mut changed = response.changed();
     response.interact(egui::Sense::click()).context_menu(|ui| {
         for (label, reset) in param.resets() {
@@ -465,7 +499,8 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         ui.spacing_mut().slider_width = SLIDER_WIDTH;
         ui.vertical(|ui| {
             for (p, (param, value)) in info.params.iter().zip(&mut values).enumerate() {
-                if knob(param, value, ui)
+                let modulated = self.controller.modulated(id, p);
+                if knob(param, value, modulated, ui)
                     && let Err(e) = self.controller.set_param(id, p, *value)
                 {
                     *self.status = format!("knob not changed: {e}");
@@ -848,7 +883,7 @@ mod tests {
             };
             let mut seen = (egui::Rect::NOTHING, false);
             let mut output = ctx.run_ui(input, |ui| {
-                knob(param, &mut value, ui);
+                knob(param, &mut value, None, ui);
                 seen = (ui.min_rect(), egui::Popup::is_any_open(ui.ctx()));
             });
             output.textures_delta.clear();
@@ -1208,6 +1243,97 @@ mod tests {
             shown |= texts(&shapes).iter().any(|(t, _)| t == param.help);
         }
         assert!(shown, "no tooltip");
+    }
+
+    /// One frame of a lone knob; returns what was painted.
+    fn paint_knob(param: &ParamInfo, value: f32, modulated: Option<f32>) -> Vec<egui::Shape> {
+        let ctx = egui::Context::default();
+        let mut value = value;
+        let mut output = ctx.run_ui(window(vec![]), |ui| {
+            knob(param, &mut value, modulated, ui);
+        });
+        output.textures_delta.clear();
+        output.shapes.into_iter().map(|c| c.shape).collect()
+    }
+
+    fn marks(shapes: &[egui::Shape]) -> Vec<f32> {
+        shapes
+            .iter()
+            .filter_map(|shape| match shape {
+                egui::Shape::LineSegment { points, stroke } if stroke.color == CV_PIN => {
+                    Some(points[0].x)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The handle: the only shape narrower than it is tall.
+    fn handle_x(shapes: &[egui::Shape]) -> f32 {
+        let handles: Vec<f32> = shapes
+            .iter()
+            .map(|shape| shape.visual_bounding_rect())
+            .filter(|r| r.is_positive() && r.width() < r.height())
+            .map(|r| r.center().x)
+            .collect();
+        assert_eq!(handles.len(), 1, "{shapes:?}");
+        handles[0]
+    }
+
+    #[test]
+    fn the_modulation_mark_sits_where_the_handle_would() {
+        // Logarithmic and linear knobs.
+        for param in [
+            &filter::INFO.params[filter::CUTOFF],
+            &delay::INFO.params[delay::FEEDBACK],
+        ] {
+            let modulated = param.from_normalized(0.7);
+            let marked = marks(&paint_knob(param, param.min, Some(modulated)));
+            assert_eq!(marked.len(), 1, "{}", param.name);
+            let handle = handle_x(&paint_knob(param, modulated, None));
+            assert!(
+                (marked[0] - handle).abs() < 0.5,
+                "{}: {marked:?} vs {handle}",
+                param.name
+            );
+        }
+    }
+
+    #[test]
+    fn no_mark_where_the_knob_is_not_moved() {
+        let param = &delay::INFO.params[delay::FEEDBACK];
+        assert!(marks(&paint_knob(param, 0.5, Some(0.5))).is_empty());
+        assert!(marks(&paint_knob(param, 0.5, None)).is_empty());
+    }
+
+    #[test]
+    fn modulated_knobs_are_marked_once_the_patch_plays() {
+        let patch = presets::get("chaos").unwrap();
+        let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
+        let (mut engine, controller) = Engine::new(graph, out, 1024);
+        let mut editor = Editor::new(controller, Context::new(48_000.0), &patch.positions);
+        // Past the knobs' glides.
+        for _ in 0..48_000 {
+            engine.next_sample();
+        }
+        let moved = editor
+            .controller
+            .nodes()
+            .iter()
+            .flat_map(|n| {
+                let c = &editor.controller;
+                n.info.params.iter().enumerate().filter(move |&(p, param)| {
+                    let set = param.to_normalized(n.params[p]);
+                    let actual = param.to_normalized(c.modulated(n.id, p).unwrap());
+                    (actual - set).abs() > MARKER_MIN_GAP
+                })
+            })
+            .count();
+        assert!(moved > 0, "the chaos preset modulates knobs");
+        let ctx = egui::Context::default();
+        paint(&mut editor, &ctx, vec![]);
+        let shapes = paint(&mut editor, &ctx, vec![]);
+        assert_eq!(marks(&shapes).len(), moved);
     }
 
     #[test]

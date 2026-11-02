@@ -100,6 +100,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::engine::graph::MAX_PARAMS;
 
     #[test]
     fn every_kind_builds_a_module_of_that_kind() {
@@ -117,6 +118,13 @@ mod tests {
             for param in info.params {
                 assert!(!param.help.is_empty(), "{} {}", info.name, param.name);
             }
+        }
+    }
+
+    #[test]
+    fn every_knob_fits_in_the_table_of_modulated_values() {
+        for info in KINDS {
+            assert!(info.params.len() <= MAX_PARAMS, "{}", info.name);
         }
     }
 

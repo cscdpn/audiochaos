@@ -27,6 +27,8 @@ the knobs.
 - Ctrl+drag from a pin picks up its wires to move them to another pin;
   dropping them on nothing removes them.
 - Hover a slider, a block's title or a palette entry to see what it does.
+- A blue tick on a slider's rail shows where CV actually takes the knob,
+  when that is away from the slider's handle.
 - Right-click a slider to reset it (see [below](#knobs-and-cv)).
 - The canvas pans and zooms with the mouse.
 - **Patch** menu: load a built-in preset, **Arrange blocks** into columns
@@ -67,6 +69,11 @@ or overrides the other, so the knob sets where the signal starts from:
 - Knob at its middle, a ±1 signal (an LFO) swings both ways but overshoots
   both ends, and flattens there: go through `atten` at gain 0.5 to fit it
   exactly, at a smaller gain to make it subtle, at a negative one to invert it.
+
+In the editor, a blue tick on the slider shows the value the knob actually
+takes, signal and knob together; it follows the signal as it moves. A
+`clock` input overrides `time` or `rate` beyond what the tick shows: the
+block's light shows that pace.
 
 Right-clicking a slider in the editor returns it to its minimum, its middle
 or its default. Signal inputs follow their own rules: `fm` is scaled by the
@@ -270,8 +277,9 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
 - MIDI input follows it too: midir's threads decode messages into atomics
   that `midi` modules read once per block, so a burst of knob turns never
   stalls the audio.
-- Lights go the other way the same way: after each block, the engine stores
-  every module's brightness in an atomic per slot, and the editor reads them
+- Lights and the blue ticks go the other way the same way: after each block,
+  the engine stores every module's brightness and every knob's modulated
+  value in an atomic per slot, and the editor reads them
   when it draws, about 30 times a second while some block has a light. What
   a light shows comes from inside the module, so it is the real pace, knob,
   CV and clock together. Drawn 30 times a second, a light faster than about

@@ -12,6 +12,10 @@ pub const MAX_CABLES: usize = 256;
 /// Modules live in this many slots, allocated once for the same reason.
 pub const MAX_MODULES: usize = 64;
 
+/// The most knobs a module has (the sequencer's rate and eight steps), so
+/// the UI can be shown every knob's modulated value in a fixed-size table.
+pub const MAX_PARAMS: usize = 9;
+
 /// Every input is clamped to ±RAIL, like the power rails of a hardware
 /// modular, and NaN reads as 0. Feedback loops through VCAs multiply without
 /// bound, and a single non-finite sample reaching a filter would poison its
@@ -292,6 +296,13 @@ impl Graph {
         self.node(node).module.sample()
     }
 
+    /// The value a knob took on the last sample processed, CV included, if
+    /// there is a module in this slot and it has that knob.
+    pub fn modulated(&self, node: NodeId, param: usize) -> Option<f32> {
+        let buffer = self.slots[node.0].as_ref()?.params.get(param)?;
+        Some(buffer[BLOCK - 1])
+    }
+
     /// The light of the module in this slot, if there is a module and it
     /// has one.
     pub fn led(&self, node: NodeId) -> Option<f32> {
@@ -493,6 +504,29 @@ mod tests {
         assert!(plugged(&mut g), "b still plugs into it");
         g.remove(b);
         assert!(!plugged(&mut g));
+    }
+
+    #[test]
+    fn modulated_values_include_the_cv() {
+        let mut g = Graph::new(SR);
+        let cv = g.add("cv", Box::new(Emit(0.25)));
+        let offset = g.add("offset", Box::new(Offset));
+        assert_eq!(g.modulated(offset, 1), None, "no such knob");
+        g.init_param(offset, 0, 2.0);
+        g.process();
+        assert_eq!(g.modulated(offset, 0), Some(2.0));
+        g.connect(Cable {
+            from: cv,
+            from_port: 0,
+            to: offset,
+            to_port: OFFSET.cv_port(0),
+        })
+        .unwrap();
+        g.process();
+        // A quarter of the -10..10 travel above the knob.
+        assert!(close(g.modulated(offset, 0).unwrap(), 7.0));
+        g.remove(offset);
+        assert_eq!(g.modulated(offset, 0), None);
     }
 
     #[test]

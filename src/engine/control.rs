@@ -6,7 +6,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
-use super::graph::{Cable, CableSet, Graph, GraphError, MAX_MODULES, Node, NodeId, free_slot};
+use super::graph::{
+    Cable, CableSet, Graph, GraphError, MAX_MODULES, MAX_PARAMS, Node, NodeId, free_slot,
+};
 use super::module::{BLOCK, Module, ModuleInfo};
 use super::sample::Sample;
 
@@ -90,17 +92,41 @@ impl SampleState {
     }
 }
 
-/// The modules' lights, by slot, written by the audio thread once per block
-/// and read by the UI whenever it draws: atomics, so neither waits for the
-/// other. A torn view across slots does not matter for lights.
-struct Leds([AtomicU32; MAX_MODULES]);
+/// What the modules show, by slot: their light and the values their knobs
+/// actually take, CV included. Written by the audio thread once per block and
+/// read by the UI whenever it draws: atomics, so neither waits for the other.
+/// A torn view across slots does not matter for display.
+struct Readings {
+    leds: [Reading; MAX_MODULES],
+    params: [[Reading; MAX_PARAMS]; MAX_MODULES],
+}
 
-/// Stored as the bits of an `f32`, NaN for no light.
-const NO_LED: f32 = f32::NAN;
+/// An `f32` as its bits, NaN for nothing to show.
+struct Reading(AtomicU32);
 
-impl Default for Leds {
+impl Reading {
+    fn get(&self) -> Option<f32> {
+        Some(f32::from_bits(self.0.load(Ordering::Relaxed))).filter(|v| !v.is_nan())
+    }
+
+    fn set(&self, value: Option<f32>) {
+        let value = value.unwrap_or(f32::NAN);
+        self.0.store(value.to_bits(), Ordering::Relaxed);
+    }
+}
+
+impl Default for Reading {
     fn default() -> Self {
-        Self(std::array::from_fn(|_| AtomicU32::new(NO_LED.to_bits())))
+        Self(AtomicU32::new(f32::NAN.to_bits()))
+    }
+}
+
+impl Default for Readings {
+    fn default() -> Self {
+        Self {
+            leds: std::array::from_fn(|_| Reading::default()),
+            params: std::array::from_fn(|_| std::array::from_fn(|_| Reading::default())),
+        }
     }
 }
 
@@ -115,15 +141,20 @@ pub struct Controller {
     /// In processing order.
     nodes: Vec<NodeState>,
     cables: CableSet,
-    leds: Arc<Leds>,
+    readings: Arc<Readings>,
 }
 
 impl Controller {
     /// How bright a module's light was at the end of the last block played,
     /// if it has one. None before the first block.
     pub fn led(&self, id: NodeId) -> Option<f32> {
-        let bits = self.leds.0[id.0].load(Ordering::Relaxed);
-        Some(f32::from_bits(bits)).filter(|b| !b.is_nan())
+        self.readings.leds[id.0].get()
+    }
+
+    /// The value a knob actually took at the end of the last block played,
+    /// CV included, in the parameter's units. None before the first block.
+    pub fn modulated(&self, id: NodeId, param: usize) -> Option<f32> {
+        self.readings.params[id.0][param].get()
     }
 
     /// The module feeding the speakers.
@@ -313,7 +344,7 @@ pub struct Engine {
     commands: Consumer<Command>,
     retired: Producer<Retired>,
     position: usize,
-    leds: Arc<Leds>,
+    readings: Arc<Readings>,
 }
 
 impl Engine {
@@ -322,7 +353,7 @@ impl Engine {
         let (producer, consumer) = RingBuffer::new(queue_capacity);
         let (retired_producer, retired_consumer) = RingBuffer::new(queue_capacity);
         let (nodes, cables) = mirror(&graph);
-        let leds = Arc::new(Leds::default());
+        let readings = Arc::new(Readings::default());
         let controller = Controller {
             sample_rate: graph.sample_rate(),
             output,
@@ -330,7 +361,7 @@ impl Engine {
             retired: retired_consumer,
             nodes,
             cables,
-            leds: Arc::clone(&leds),
+            readings: Arc::clone(&readings),
         };
         let engine = Self {
             graph: Box::new(graph),
@@ -338,7 +369,7 @@ impl Engine {
             commands: consumer,
             retired: retired_producer,
             position: BLOCK,
-            leds,
+            readings,
         };
         (engine, controller)
     }
@@ -347,7 +378,7 @@ impl Engine {
         if self.position == BLOCK {
             self.apply_commands();
             self.graph.process();
-            self.publish_leds();
+            self.publish_readings();
             self.position = 0;
         }
         let sample = self.graph.output(self.output, 0)[self.position];
@@ -356,10 +387,13 @@ impl Engine {
     }
 
     /// Every slot, so a freed one goes dark.
-    fn publish_leds(&self) {
-        for (slot, led) in self.leds.0.iter().enumerate() {
-            let brightness = self.graph.led(NodeId(slot)).unwrap_or(NO_LED);
-            led.store(brightness.to_bits(), Ordering::Relaxed);
+    fn publish_readings(&self) {
+        for slot in 0..MAX_MODULES {
+            let id = NodeId(slot);
+            self.readings.leds[slot].set(self.graph.led(id));
+            for (param, reading) in self.readings.params[slot].iter().enumerate() {
+                reading.set(self.graph.modulated(id, param));
+            }
         }
     }
 
@@ -478,6 +512,19 @@ mod tests {
         controller.remove(lfo).unwrap();
         run_block(&mut engine);
         assert_eq!(controller.led(lfo), None);
+    }
+
+    #[test]
+    fn modulated_values_reach_the_controller_once_played() {
+        let (mut engine, mut controller, amp, _) = engine(8);
+        assert_eq!(controller.modulated(amp, vca::GAIN), None);
+        controller.set_param(amp, vca::GAIN, 0.0).unwrap();
+        run_block(&mut engine);
+        let gliding = controller.modulated(amp, vca::GAIN).unwrap();
+        assert!(gliding > 0.0 && gliding < 1.0, "{gliding}");
+        controller.remove(amp).unwrap();
+        run_block(&mut engine);
+        assert_eq!(controller.modulated(amp, vca::GAIN), None);
     }
 
     #[test]
