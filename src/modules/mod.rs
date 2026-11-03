@@ -11,6 +11,7 @@ pub mod distortion;
 mod dsp;
 pub mod filter;
 pub mod flanger;
+pub mod input;
 pub mod lfo;
 pub mod master;
 pub mod midi;
@@ -27,6 +28,7 @@ pub mod vca;
 
 use std::sync::Arc;
 
+use crate::engine::input::LiveInput;
 use crate::engine::module::{Module, ModuleInfo};
 use crate::midi::State;
 
@@ -36,20 +38,24 @@ pub struct Context {
     pub sample_rate: f32,
     /// What the MIDI controllers play; `midi` modules read it.
     pub midi: Arc<State>,
+    /// What the sound card's inputs play; `input` modules read it.
+    pub input: Arc<LiveInput>,
 }
 
 impl Context {
-    /// With no MIDI controller playing.
+    /// With no MIDI controller playing, and silent inputs.
     pub fn new(sample_rate: f32) -> Self {
         Self {
             sample_rate,
             midi: Arc::default(),
+            input: Arc::default(),
         }
     }
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 22] = [
+pub const KINDS: [&ModuleInfo; 23] = [
+    &input::INFO,
     &midi::INFO,
     &poly::INFO,
     &clock::INFO,
@@ -79,6 +85,7 @@ pub const KINDS: [&ModuleInfo; 22] = [
 pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>> {
     let sr = context.sample_rate;
     let module: Box<dyn Module> = match kind {
+        "input" => Box::new(input::Input::new(Arc::clone(&context.input))),
         "midi" => Box::new(midi::Midi::new(Arc::clone(&context.midi), sr)),
         "poly" => Box::new(poly::Poly::new(Arc::clone(&context.midi), sr)),
         "clock" => Box::new(clock::Clock::new(sr)),

@@ -9,6 +9,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use super::graph::{
     Cable, CableSet, Graph, GraphError, MAX_MODULES, MAX_PARAMS, Node, NodeId, free_slot,
 };
+use super::input::Feed;
 use super::module::{BLOCK, Module, ModuleInfo};
 use super::sample::Sample;
 
@@ -345,6 +346,7 @@ pub struct Engine {
     retired: Producer<Retired>,
     position: usize,
     readings: Arc<Readings>,
+    input: Option<Feed>,
 }
 
 impl Engine {
@@ -370,13 +372,22 @@ impl Engine {
             retired: retired_producer,
             position: BLOCK,
             readings,
+            input: None,
         };
         (engine, controller)
+    }
+
+    /// Where `audio in` modules get the sound card's input from.
+    pub fn set_input(&mut self, input: Feed) {
+        self.input = Some(input);
     }
 
     pub fn next_sample(&mut self) -> f32 {
         if self.position == BLOCK {
             self.apply_commands();
+            if let Some(input) = &mut self.input {
+                input.next_block();
+            }
             self.graph.process();
             self.publish_readings();
             self.position = 0;

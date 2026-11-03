@@ -12,7 +12,8 @@ through the delay, with random voltages retuning them. `just run bass`
 starts on a plain sequenced bassline instead, a calm base to patch from, and
 `just run groovygroove` on a groovier one. `just run keys` is played from a
 MIDI controller (see [MIDI controllers](#midi-controllers)), and `just run
-chords` too, four notes at once (see [Chords](#chords)).
+chords` too, four notes at once (see [Chords](#chords)). An `input`
+block brings in the sound card's input (see [Audio input](#audio-input)).
 
 ### Graphical editor
 
@@ -169,6 +170,23 @@ Some starting points: a pad's gate into `trigger` to fire a drum sound, keys on
 `pitch` and `gate` to play one chromatically, an LFO or noise through `s&h` into
 `start cv` with a short looping `length` to stutter.
 
+### Audio input
+
+An `input` block brings in the sound card's first two inputs: on a two-input
+interface, the microphone on `1` and the instrument on `2`. Its light shows
+the level. The input is opened at startup if there is one; the status bar says
+why when it is not, for instance when it cannot run at the output's rate.
+
+- **Latency.** The sound reaches the speakers about two callbacks late, one
+  for each stream. `--buffer 128` asks the sound card for smaller callbacks
+  than the system's usual 1024 frames (about 21 ms at 48 kHz each). On Linux,
+  ALSA's shared devices only take 1024, so the round trip stays near 45 ms;
+  the status bar says so when the card refuses. That is noticeable when playing
+  through the synth: to hear yourself, prefer the
+  interface's direct monitor, and use the synth for what it adds.
+- **Feedback.** A microphone near the speakers, plus delay feedback, howls.
+  Use headphones, or keep the microphone away and the volume down.
+
 ### Patches
 
 A patch is a JSON file listing its modules, knob values and cables, with
@@ -205,6 +223,7 @@ Module types, as patches and the editor's palette name them:
 
 | Type | Does |
 |---|---|
+| input | the sound card's first two inputs: a microphone, an instrument |
 | midi | a MIDI controller's keyboard, pads and knobs as voltages |
 | poly | the keyboard as four voices, for chords |
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
@@ -304,6 +323,15 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
 - A `clock` input changes how a module behaves only while a cable is in it:
   the graph tells modules when an input gains or loses its last cable, since
   an unplugged input reads the same zeros as a silent one.
+- The sound card's input reaches the engine the same way: its stream has a
+  callback of its own, out of step with the output's, so frames go through a
+  lock-free queue, and the engine takes a block from it before computing
+  each block. The queue keeps a backlog of one callback of each stream,
+  measured as they run: less and it runs dry between two input callbacks.
+  When input and output are different devices, their clocks drift apart; the
+  queue then catches up at once, or waits to refill, with a click, rather
+  than letting the latency grow. The input is not resampled: it must run at
+  the output's rate.
 - Live recording follows the same rule: the audio thread copies samples into
   a second lock-free queue, and a writer thread empties it to disk. The queue
   holds a second of audio; if the disk stalls longer, samples are dropped and
@@ -338,6 +366,7 @@ just run          # chaos preset
 just run bass     # bass preset
 just run my.json  # a patch file
 just run --render out.wav --seconds 60   # render to WAV, no sound card
+just run --buffer 128                    # smaller sound card buffers
 just run --midi-monitor                  # what the MIDI controllers send
 just tui          # terminal UI instead of the editor
 just test

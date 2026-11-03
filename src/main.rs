@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::{env, fs, io};
 
 use audiochaos::engine::control::Engine;
@@ -10,13 +11,18 @@ use audiochaos::modules::Context;
 use audiochaos::patch::{self, Patch};
 use audiochaos::tui::{self, App};
 use audiochaos::{gui, presets};
+use cpal::BufferSize;
 
-const USAGE: &str = "usage: audiochaos [--tui] [preset | patch.json]
+const USAGE: &str = "usage: audiochaos [--tui] [--buffer FRAMES] [preset | patch.json]
        audiochaos --render out.wav [--seconds N] [preset | patch.json]
        audiochaos --midi-monitor
 
 Starts the graphical editor, or the terminal UI with --tui, on the given
 built-in preset or patch file (default: the first preset).
+
+--buffer asks the sound card for callbacks of that many frames, for less
+latency on the inputs: 128 or 256 rather than the system's default, often
+1024. Too small and the sound breaks up.
 
 --render writes N seconds (default 30) of the patch to a WAV file instead,
 without opening the sound card.
@@ -49,6 +55,7 @@ struct Args {
     patch: Option<String>,
     render: Option<PathBuf>,
     seconds: Option<f32>,
+    buffer: Option<u32>,
     midi_monitor: bool,
 }
 
@@ -59,6 +66,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
         patch: None,
         render: None,
         seconds: None,
+        buffer: None,
         midi_monitor: false,
     };
     while let Some(arg) = args.next() {
@@ -78,6 +86,13 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
                     _ => return Err(format!("invalid duration {seconds:?}\n{USAGE}")),
                 }
             }
+            "--buffer" => {
+                let frames = value()?;
+                match frames.parse::<u32>() {
+                    Ok(f) if f > 0 => parsed.buffer = Some(f),
+                    _ => return Err(format!("invalid buffer size {frames:?}\n{USAGE}")),
+                }
+            }
             _ if arg.starts_with('-') => return Err(format!("unknown option {arg}\n{USAGE}")),
             _ if parsed.patch.is_some() => return Err(format!("too many arguments\n{USAGE}")),
             _ => parsed.patch = Some(arg),
@@ -89,6 +104,9 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
     let others = parsed.tui || parsed.patch.is_some() || parsed.render.is_some();
     if parsed.midi_monitor && others {
         return Err(format!("--midi-monitor goes alone\n{USAGE}"));
+    }
+    if parsed.buffer.is_some() && parsed.render.is_some() {
+        return Err(format!("--buffer and --render do not go together\n{USAGE}"));
     }
     if parsed.seconds.is_some() && parsed.render.is_none() {
         return Err(format!("--seconds only goes with --render\n{USAGE}"));
@@ -119,7 +137,7 @@ fn run() -> Result<(), Box<dyn Error>> {
         println!("wrote {seconds} s to {}", path.display());
         return Ok(());
     }
-    let (device, config) = audio::default_output()?;
+    let (device, config) = audio::default_output(args.buffer)?;
     let context = Context::new(config.sample_rate as f32);
     // A missing MIDI setup is no reason not to play.
     let (_midi_inputs, mut status) = match midi::connect(&context.midi) {
@@ -136,7 +154,26 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
     let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
     let (tap, recorder) = record::tap(config.sample_rate);
-    let playback = audio::play(&device, config, engine, tap)?;
+    if let Some(frames) = args.buffer
+        && config.buffer_size == BufferSize::Default
+    {
+        status = format!("{status}; the sound card refused a buffer of {frames} frames");
+    }
+    let input = match audio::default_input(config.sample_rate, args.buffer) {
+        Ok((device, input_config)) => Some(audio::Input {
+            device,
+            config: input_config,
+            live: Arc::clone(&context.input),
+        }),
+        Err(e) => {
+            status = format!("{status}; no audio input: {e}");
+            None
+        }
+    };
+    let playback = audio::play(&device, config, engine, tap, input)?;
+    if let Some(e) = playback.input_problem() {
+        status = format!("{status}; no audio input: {e}");
+    }
     if args.tui {
         let mut app = App::new(controller);
         app.status = status;
@@ -221,6 +258,18 @@ mod tests {
         assert!(error(&["--render", "x.wav", "--seconds", "abc"]).starts_with("invalid duration"));
         assert!(error(&["--seconds", "3"]).starts_with("--seconds only goes with --render"));
         assert!(error(&["--render", "x.wav", "--tui"]).contains("do not go together"));
+    }
+
+    #[test]
+    fn buffer_takes_a_number_of_frames() {
+        assert_eq!(
+            parse(&["--buffer", "128"]).unwrap().unwrap().buffer,
+            Some(128)
+        );
+        let error = |args: &[&str]| parse(args).unwrap_err();
+        assert!(error(&["--buffer", "0"]).starts_with("invalid buffer size"));
+        assert!(error(&["--buffer", "big"]).starts_with("invalid buffer size"));
+        assert!(error(&["--buffer", "64", "--render", "x.wav"]).contains("do not go together"));
     }
 
     #[test]

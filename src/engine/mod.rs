@@ -1,6 +1,7 @@
 pub mod audio;
 pub mod control;
 pub mod graph;
+pub mod input;
 pub mod module;
 pub mod param;
 pub mod record;
