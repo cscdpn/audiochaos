@@ -81,6 +81,36 @@ pub struct PatchCable {
     pub input: String,
 }
 
+impl PatchCable {
+    /// This cable between modules `from` and `to`, by port index.
+    fn ports(
+        &self,
+        from: NodeId,
+        from_info: &ModuleInfo,
+        to: NodeId,
+        to_info: &ModuleInfo,
+    ) -> Result<Cable, PatchError> {
+        let unknown_port = |module: &str, port: &str| PatchError::UnknownPort {
+            module: module.to_string(),
+            port: port.to_string(),
+        };
+        let from_port = from_info
+            .outputs
+            .iter()
+            .position(|o| *o == self.output)
+            .ok_or_else(|| unknown_port(&self.from, &self.output))?;
+        let to_port = (0..to_info.num_input_ports())
+            .find(|&port| to_info.input_port_name(port) == self.input)
+            .ok_or_else(|| unknown_port(&self.to, &self.input))?;
+        Ok(Cable {
+            from,
+            from_port,
+            to,
+            to_port,
+        })
+    }
+}
+
 #[derive(Debug)]
 pub enum PatchError {
     Json(serde_json::Error),
@@ -267,27 +297,10 @@ impl Patch {
             }
         }
 
-        let unknown_port = |module: &str, port: &str| PatchError::UnknownPort {
-            module: module.to_string(),
-            port: port.to_string(),
-        };
         let mut cables = CableSet::new();
         for c in &self.cables {
             let ((from, from_info), (to, to_info)) = (find(&c.from)?, find(&c.to)?);
-            let from_port = from_info
-                .outputs
-                .iter()
-                .position(|o| *o == c.output)
-                .ok_or_else(|| unknown_port(&c.from, &c.output))?;
-            let to_port = (0..to_info.num_input_ports())
-                .find(|&port| to_info.input_port_name(port) == c.input)
-                .ok_or_else(|| unknown_port(&c.to, &c.input))?;
-            let cable = Cable {
-                from,
-                from_port,
-                to,
-                to_port,
-            };
+            let cable = c.ports(from, from_info, to, to_info)?;
             cables
                 .insert(cable, from_info, to_info)
                 .map_err(PatchError::Graph)?;
@@ -387,6 +400,146 @@ impl Patch {
             &files,
             controller.cables(),
         )
+    }
+}
+
+impl Patch {
+    /// The named modules, with their knobs, sound files and positions, and
+    /// the cables between them: a group of blocks to duplicate or keep, as a
+    /// patch without a master. Cables to modules left out are dropped.
+    pub fn group(&self, names: &[&str]) -> Patch {
+        let kept = |name: &String| {
+            names.contains(&name.as_str())
+                && self
+                    .modules
+                    .iter()
+                    .any(|m| &m.name == name && m.kind != master::INFO.name)
+        };
+        Patch {
+            version: VERSION,
+            description: String::new(),
+            modules: self
+                .modules
+                .iter()
+                .filter(|m| kept(&m.name))
+                .cloned()
+                .collect(),
+            knobs: self
+                .knobs
+                .iter()
+                .filter(|(name, _)| kept(name))
+                .map(|(name, knobs)| (name.clone(), knobs.clone()))
+                .collect(),
+            cables: self
+                .cables
+                .iter()
+                .filter(|c| kept(&c.from) && kept(&c.to))
+                .cloned()
+                .collect(),
+            positions: self
+                .positions
+                .iter()
+                .filter(|(name, _)| kept(name))
+                .map(|(name, pos)| (name.clone(), *pos))
+                .collect(),
+        }
+    }
+
+    /// Adds this patch's modules to the playing one, with their knobs, sound
+    /// files and the cables between them, after the modules already there. A
+    /// master is left out, the playing patch has one. Each module gets a free
+    /// name of its own: a copy of `osc 2` is the first free `osc`, `osc 3`…
+    /// Returns the new modules by the names they had here. All or nothing:
+    /// on a mistake, the modules already added are removed again.
+    pub fn insert_into(
+        &self,
+        controller: &mut Controller,
+        context: &Context,
+    ) -> Result<Vec<(String, NodeId)>, Box<dyn Error>> {
+        let modules: Vec<_> = self
+            .modules
+            .iter()
+            .filter(|m| m.kind != master::INFO.name)
+            .collect();
+        if controller.nodes().len() + modules.len() > MAX_MODULES {
+            return Err(PatchError::TooManyModules.into());
+        }
+        let mut added = Vec::new();
+        let result = self.insert_modules(&modules, controller, context, &mut added);
+        if let Err(e) = result {
+            for (_, id) in added.into_iter().rev() {
+                // Just added and checked: removing them cannot fail but for a
+                // full queue, which the next command would report anyway.
+                let _ = controller.remove(id);
+            }
+            return Err(e);
+        }
+        Ok(added)
+    }
+
+    fn insert_modules(
+        &self,
+        modules: &[&PatchModule],
+        controller: &mut Controller,
+        context: &Context,
+        added: &mut Vec<(String, NodeId)>,
+    ) -> Result<(), Box<dyn Error>> {
+        for m in modules {
+            let name = controller.free_name(base_name(&m.name));
+            let module = modules::build(&m.kind, context, seed(&name)).ok_or_else(|| {
+                PatchError::UnknownType {
+                    module: m.name.clone(),
+                    kind: m.kind.clone(),
+                }
+            })?;
+            let id = controller.add(name, module)?;
+            added.push((m.name.clone(), id));
+            if let Some(file) = &m.file {
+                if m.kind != sampler::INFO.name {
+                    return Err(PatchError::NotASampler(m.name.clone()).into());
+                }
+                controller.set_sample(id, Box::new(Sample::load_or_silence(file)))?;
+            }
+            let info = controller.node(id).info;
+            for (knob, &value) in self.knobs.get(&m.name).into_iter().flatten() {
+                let param = info
+                    .params
+                    .iter()
+                    .position(|p| p.name == knob)
+                    .ok_or_else(|| PatchError::UnknownKnob {
+                        module: m.name.clone(),
+                        knob: knob.clone(),
+                    })?;
+                controller.set_param(id, param, value)?;
+            }
+        }
+        let id = |name: &str| added.iter().find(|(n, _)| n == name).map(|&(_, id)| id);
+        for c in &self.cables {
+            let (Some(from), Some(to)) = (id(&c.from), id(&c.to)) else {
+                let listed = |name: &String| self.modules.iter().any(|m| &m.name == name);
+                match [&c.from, &c.to].into_iter().find(|n| !listed(n)) {
+                    Some(unknown) => return Err(PatchError::UnknownModule(unknown.clone()).into()),
+                    // A cable to the master, left out, goes too.
+                    None => continue,
+                }
+            };
+            let cable = c.ports(
+                from,
+                controller.node(from).info,
+                to,
+                controller.node(to).info,
+            )?;
+            controller.connect(cable)?;
+        }
+        Ok(())
+    }
+}
+
+/// A module's name without its number: `osc 2` is a copy of `osc`.
+fn base_name(name: &str) -> &str {
+    match name.rsplit_once(' ') {
+        Some((base, number)) if number.parse::<u32>().is_ok() => base,
+        _ => name,
     }
 }
 
@@ -576,6 +729,96 @@ mod tests {
             error.to_string(),
             r#"module "theremin" has unknown type "theremin""#
         );
+    }
+
+    /// An LFO sweeping a filter, both into the master, as in a saved patch.
+    const SWEEP: &str = r#"{
+        "version": 2,
+        "modules": [
+            { "name": "lfo", "type": "lfo" },
+            { "name": "filter 2", "type": "filter" },
+            { "name": "master", "type": "master" }
+        ],
+        "knobs": { "lfo": { "rate": 3.0 }, "filter 2": { "cutoff": 800.0 }, "master": { "volume": 0.2 } },
+        "cables": [
+            { "from": "lfo", "output": "sine", "to": "filter 2", "input": "cutoff cv" },
+            { "from": "filter 2", "output": "lowpass", "to": "master", "input": "in" },
+            { "from": "lfo", "output": "square", "to": "master", "input": "volume cv" }
+        ],
+        "positions": { "lfo": [0.0, 10.0], "filter 2": [300.0, 10.0], "master": [600.0, 0.0] }
+    }"#;
+
+    #[test]
+    fn a_group_keeps_the_cables_between_its_modules_only() {
+        let group = patch(SWEEP).group(&["lfo", "filter 2", "master"]);
+        let names: Vec<_> = group.modules.iter().map(|m| m.name.as_str()).collect();
+        assert_eq!(names, ["lfo", "filter 2"], "the master stays out");
+        assert_eq!(group.cables, patch(SWEEP).cables[..1]);
+        assert_eq!(group.knobs.len(), 2);
+        assert_eq!(group.positions.len(), 2);
+        assert!(patch(&group.to_json()).group(&["lfo"]).cables.is_empty());
+    }
+
+    #[test]
+    fn inserting_a_group_adds_renamed_copies_with_knobs_and_cables() {
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 256);
+        let context = Context::new(SR);
+        patch(SWEEP).load_into(&mut controller, &context).unwrap();
+        let group = patch(SWEEP).group(&["lfo", "filter 2"]);
+        let added = group.insert_into(&mut controller, &context).unwrap();
+        let name = |id| controller.node(id).name.clone();
+        let names: Vec<_> = added
+            .iter()
+            .map(|(old, id)| (old.as_str(), name(*id)))
+            .collect();
+        assert_eq!(
+            names,
+            [("lfo", "lfo 2".into()), ("filter 2", "filter".into())]
+        );
+        let saved = Patch::from_controller(&controller);
+        assert_eq!(saved.knobs["lfo 2"]["rate"], 3.0);
+        assert_eq!(saved.knobs["filter"]["cutoff"], 800.0);
+        let copied = PatchCable {
+            from: "lfo 2".into(),
+            output: "sine".into(),
+            to: "filter".into(),
+            input: "cutoff cv".into(),
+        };
+        assert!(saved.cables.contains(&copied));
+        assert_eq!(saved.cables.len(), 4, "the originals keep theirs");
+    }
+
+    #[test]
+    fn inserting_a_whole_patch_leaves_its_master_out() {
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 256);
+        let added = patch(SWEEP)
+            .insert_into(&mut controller, &Context::new(SR))
+            .unwrap();
+        assert_eq!(added.len(), 2);
+        assert_eq!(controller.nodes().len(), 4);
+        assert_eq!(controller.cables().len(), 1, "the LFO into the filter");
+    }
+
+    #[test]
+    fn a_mistake_while_inserting_adds_nothing() {
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 256);
+        let bad = patch(&SWEEP.replace(r#""cutoff cv""#, r#""nope""#));
+        let error = bad
+            .insert_into(&mut controller, &Context::new(SR))
+            .unwrap_err();
+        assert_eq!(error.to_string(), r#"module "filter 2" has no port "nope""#);
+        assert_eq!(controller.nodes().len(), 2);
+        assert!(controller.cables().is_empty());
+        let names: Vec<_> = controller.nodes().iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(names, ["osc", "master"]);
+    }
+
+    #[test]
+    fn copies_are_numbered_after_their_base_name() {
+        assert_eq!(base_name("osc 2"), "osc");
+        assert_eq!(base_name("kick env"), "kick env");
+        assert_eq!(base_name("osc"), "osc");
+        assert_eq!(base_name("lfo 2b"), "lfo 2b");
     }
 
     fn sampler_patch(file: &str) -> Patch {

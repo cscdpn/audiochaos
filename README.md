@@ -23,7 +23,7 @@ left, outputs on the right with what they carry (`±1`, `0..1`…), sliders for
 the knobs.
 
 - Right-click the canvas to add a module where you clicked; right-click a
-  block's title to remove it. New modules are named after their type
+  block's title to duplicate or remove it. New modules are named after their type
   (`filter`, `filter 2`…). The master is the one output and stays.
 - Drag from an output to an input to connect; drag a block by its title.
 - Right-click a wire to remove it, or a pin to remove all of its wires.
@@ -37,6 +37,16 @@ the knobs.
 - **Patch** menu: load a built-in preset, **Arrange blocks** into columns
   where none overlaps another, **Import…** a patch file, or **Export…** the
   current patch, block positions included.
+- Shift+click blocks, or Shift+drag around them, to select several; dragging
+  one of them moves them all. **Ctrl+D**, or **Duplicate** in a block's menu,
+  copies them just below with their knobs, sounds and the cables between
+  them: make a kick, duplicate it, retune the copy into a tom. Cables from
+  outside the selection are not copied, so plug the copy's trigger again.
+- **Ctrl+C** and **Ctrl+V** copy and paste selected blocks through the
+  clipboard, also from one window to another. **Save selection…** keeps them
+  in a file, in the patch format without a master, and **Insert blocks…**
+  adds such a file, or the blocks of any patch but its master, to the one
+  playing.
 - The computer keyboard plays the `midi` modules, without a MIDI controller
   (see [below](#computer-keyboard)).
 - A red light beside a block's title blinks at the pace the module actually

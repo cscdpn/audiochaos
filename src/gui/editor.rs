@@ -49,6 +49,12 @@ pub struct Editor {
     show_origin: bool,
     /// Each clock's Tap button.
     taps: HashMap<NodeId, Tap>,
+    /// From graph to screen coordinates, as last drawn.
+    to_global: TSTransform,
+    /// Where the graph is drawn, on screen.
+    view: Rect,
+    /// Blocks to copy, asked for from a block's menu while drawing.
+    to_duplicate: Option<Vec<BlockId>>,
     pub(super) status: String,
 }
 
@@ -65,6 +71,9 @@ impl Editor {
             sizes: HashMap::new(),
             show_origin: false,
             taps: HashMap::new(),
+            to_global: TSTransform::IDENTITY,
+            view: Rect::ZERO,
+            to_duplicate: None,
             status: String::new(),
         };
         editor.rebuild(positions);
@@ -163,7 +172,137 @@ impl Editor {
         })
     }
 
+    /// The selected blocks: egui-snarl's selection, made with Shift.
+    pub fn selection(&self, ctx: &egui::Context) -> Vec<BlockId> {
+        egui_snarl::ui::get_selected_nodes(snarl_id(), ctx)
+            .into_iter()
+            .filter(|&b| self.snarl.get_node(b).is_some())
+            .collect()
+    }
+
+    /// `blocks` as a group of modules with the cables between them, to copy
+    /// or save; `None` when that leaves nothing, the master staying out.
+    pub fn group(&self, blocks: &[BlockId]) -> Option<Patch> {
+        let names: Vec<&str> = blocks
+            .iter()
+            .map(|&b| self.controller.node(self.snarl[b]).name.as_str())
+            .collect();
+        let group = self.patch().group(&names);
+        (!group.modules.is_empty()).then_some(group)
+    }
+
+    /// Copies `blocks`, knobs and the cables between them included, just
+    /// below them.
+    pub fn duplicate(&mut self, blocks: &[BlockId]) {
+        let Some(group) = self.group(blocks) else {
+            self.status = NOTHING_SELECTED.to_string();
+            return;
+        };
+        let rects: Vec<Rect> = blocks
+            .iter()
+            .filter_map(|&b| {
+                let pos = self.snarl.get_node_info(b)?.pos;
+                Some(Rect::from_min_size(pos, self.size(b)))
+            })
+            .collect();
+        let top = rects.iter().map(|r| r.min.y).fold(f32::INFINITY, f32::min);
+        let bottom = rects
+            .iter()
+            .map(|r| r.max.y)
+            .fold(f32::NEG_INFINITY, f32::max);
+        self.insert(
+            &group,
+            Vec2::new(0.0, bottom - top + BLOCK_GAP),
+            "duplicated",
+        );
+    }
+
+    /// Adds the modules of a group, or of a whole patch but its master, to
+    /// the playing patch, in the middle of the view.
+    pub fn paste(&mut self, group: &Patch) {
+        let corner = group
+            .positions
+            .values()
+            .map(|&[x, y]| egui::pos2(x, y))
+            .reduce(Pos2::min)
+            .unwrap_or(Pos2::ZERO);
+        let middle = self.to_global.inverse() * self.view.center();
+        self.insert(group, middle - corner, "added");
+    }
+
+    /// Adds `group`'s modules and blocks, moved by `offset` from where they
+    /// were in it.
+    fn insert(&mut self, group: &Patch, offset: Vec2, done: &str) {
+        let added = match group.insert_into(&mut self.controller, &self.context) {
+            Ok(added) => added,
+            Err(e) => {
+                self.status = format!("cannot add the blocks: {e}");
+                return;
+            }
+        };
+        // Blocks a hand-written group places nowhere go in columns.
+        let infos = added
+            .iter()
+            .map(|&(_, id)| estimated_size(self.controller.node(id).info));
+        for ((name, id), default) in added.iter().zip(columns(infos)) {
+            let pos = group.positions.get(name).map(|&[x, y]| egui::pos2(x, y));
+            self.snarl.insert_node(pos.unwrap_or(default) + offset, *id);
+        }
+        let ids: Vec<NodeId> = added.iter().map(|&(_, id)| id).collect();
+        for &cable in self.controller.cables() {
+            if ids.contains(&cable.from) {
+                let (from, to) = wire(&self.snarl, cable);
+                self.snarl.connect(from, to);
+            }
+        }
+        self.status = match added.len() {
+            1 => format!("{done} {}", self.controller.node(ids[0]).name),
+            n => format!("{done} {n} blocks"),
+        };
+    }
+
+    fn size(&self, block: BlockId) -> Vec2 {
+        self.sizes
+            .get(&block)
+            .copied()
+            .unwrap_or_else(|| estimated_size(self.controller.node(self.snarl[block]).info))
+    }
+
+    /// Ctrl+C, Ctrl+V and Ctrl+D on the selected blocks, through the system
+    /// clipboard as patch JSON, so blocks also go from one window to another.
+    fn handle_shortcuts(&mut self, ui: &mut Ui) {
+        if ui.ctx().egui_wants_keyboard_input() {
+            return;
+        }
+        let events = ui.input(|i| i.events.clone());
+        for event in events {
+            match event {
+                egui::Event::Copy => match self.group(&self.selection(ui.ctx())) {
+                    Some(group) => {
+                        ui.ctx().copy_text(group.to_json());
+                        self.status = format!("copied {} blocks", group.modules.len());
+                    }
+                    None => self.status = NOTHING_SELECTED.to_string(),
+                },
+                egui::Event::Paste(text) => match Patch::from_json(&text) {
+                    Ok(group) => self.paste(&group),
+                    Err(_) => self.status = "the clipboard holds no blocks".to_string(),
+                },
+                egui::Event::Key {
+                    key: egui::Key::D,
+                    pressed: true,
+                    repeat: false,
+                    modifiers,
+                    ..
+                } if modifiers.command => self.duplicate(&self.selection(ui.ctx())),
+                _ => {}
+            }
+        }
+    }
+
     pub fn show_graph(&mut self, ui: &mut Ui) {
+        self.view = ui.max_rect();
+        self.handle_shortcuts(ui);
         let mut viewer = Viewer {
             controller: &mut self.controller,
             context: &self.context,
@@ -171,10 +310,12 @@ impl Editor {
             sizes: &mut self.sizes,
             show_origin: &mut self.show_origin,
             taps: &mut self.taps,
-            view: ui.max_rect(),
+            to_global: &mut self.to_global,
+            to_duplicate: &mut self.to_duplicate,
+            view: self.view,
         };
         SnarlWidget::new()
-            .id(egui::Id::new("patch"))
+            .id(snarl_id())
             .style(SnarlStyle {
                 // Inside the block, the default, egui-snarl leaves no room for
                 // the pins of right-aligned outputs: labels run into them.
@@ -183,7 +324,17 @@ impl Editor {
             })
             .show(&mut self.snarl, &mut viewer, ui);
         self.disconnect_cables_without_wires();
+        if let Some(blocks) = self.to_duplicate.take() {
+            self.duplicate(&blocks);
+        }
     }
+}
+
+const NOTHING_SELECTED: &str = "select blocks first: Shift+click, or Shift+drag around them";
+
+/// The node editor widget's, to read its selection.
+fn snarl_id() -> egui::Id {
+    egui::Id::new("patch")
 }
 
 fn block(snarl: &Snarl<NodeId>, id: NodeId) -> BlockId {
@@ -311,6 +462,8 @@ struct Viewer<'a> {
     sizes: &'a mut HashMap<BlockId, Vec2>,
     show_origin: &'a mut bool,
     taps: &'a mut HashMap<NodeId, Tap>,
+    to_global: &'a mut TSTransform,
+    to_duplicate: &'a mut Option<Vec<BlockId>>,
     /// Where the graph is drawn, on screen.
     view: Rect,
 }
@@ -492,6 +645,7 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         if std::mem::take(self.show_origin) {
             to_global.translation = self.view.min.to_vec2() + Vec2::splat(BLOCK_GAP);
         }
+        *self.to_global = *to_global;
     }
 
     fn has_body(&mut self, node: &NodeId) -> bool {
@@ -591,6 +745,20 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
     ) {
         let removable = snarl[block] != self.controller.output();
         let button = ui
+            .add_enabled(removable, egui::Button::new("Duplicate"))
+            .on_disabled_hover_text("A patch has one master");
+        if button.clicked() {
+            // The whole selection if this block is in it.
+            let selection = egui_snarl::ui::get_selected_nodes(snarl_id(), ui.ctx());
+            let blocks = if selection.contains(&block) {
+                selection
+            } else {
+                vec![block]
+            };
+            *self.to_duplicate = Some(blocks);
+            ui.close();
+        }
+        let button = ui
             .add_enabled(removable, egui::Button::new("Remove"))
             .on_disabled_hover_text("The master feeds the speakers");
         if button.clicked() {
@@ -604,7 +772,7 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
 mod tests {
     use super::*;
     use crate::engine::control::Engine;
-    use crate::modules::{delay, filter, master, oscillator};
+    use crate::modules::{delay, filter, master, oscillator, vca};
     use crate::presets;
 
     fn editor(preset: &str) -> Editor {
@@ -652,6 +820,8 @@ mod tests {
             sizes: &mut editor.sizes,
             show_origin: &mut editor.show_origin,
             taps: &mut editor.taps,
+            to_global: &mut editor.to_global,
+            to_duplicate: &mut editor.to_duplicate,
             view: Rect::ZERO,
         };
         f(&mut viewer, &mut editor.snarl);
@@ -1371,13 +1541,99 @@ mod tests {
         assert!(editor.moves());
     }
 
+    fn names(editor: &Editor) -> Vec<String> {
+        editor
+            .controller
+            .nodes()
+            .iter()
+            .map(|n| n.name.clone())
+            .collect()
+    }
+
+    /// The keys preset, arranged and drawn, so blocks have their sizes.
+    fn drawn_keys(ctx: &egui::Context) -> (Editor, Vec<egui::Shape>) {
+        let mut editor = editor("keys");
+        editor.arrange();
+        paint(&mut editor, ctx, vec![]);
+        let shapes = paint(&mut editor, ctx, vec![]);
+        (editor, shapes)
+    }
+
+    #[test]
+    fn duplicating_copies_blocks_and_their_wires_just_below() {
+        let ctx = egui::Context::default();
+        let (mut editor, _) = drawn_keys(&ctx);
+        let originals = [block_of(&editor, "filter"), block_of(&editor, "vca")];
+        editor.duplicate(&originals);
+        assert_eq!(editor.status, "duplicated 2 blocks");
+        assert!(names(&editor).ends_with(&["filter 2".into(), "vca 2".into()]));
+        let (filter, vca) = (module(&editor, "filter 2"), module(&editor, "vca 2"));
+        let cables = editor.controller.cables();
+        assert!(cables.contains(&Cable {
+            from: filter,
+            from_port: filter::OUT_LOWPASS,
+            to: vca,
+            to_port: vca::IN_SIGNAL,
+        }));
+        // The gate into the original VCA comes from outside: not copied.
+        assert_eq!(cables.iter().filter(|c| c.to == vca).count(), 1);
+        assert_eq!(wires(&editor), expected_wires(&editor));
+        assert_eq!(editor.controller.node(filter).params, {
+            let original = module(&editor, "filter");
+            editor.controller.node(original).params.clone()
+        });
+
+        paint(&mut editor, &ctx, vec![]);
+        let rects = block_rects(&editor);
+        let rect = |name: &str| rects.iter().find(|(n, _)| n == name).unwrap().1;
+        let bottom = rect("filter").bottom().max(rect("vca").bottom());
+        for copy in ["filter 2", "vca 2"] {
+            assert!(rect(copy).top() > bottom, "{copy} overlaps the originals");
+        }
+        assert_eq!(rect("filter 2").left(), rect("filter").left());
+    }
+
+    #[test]
+    fn the_master_is_not_duplicated() {
+        let mut editor = editor("keys");
+        let before = names(&editor);
+        editor.duplicate(&[block_of(&editor, "master")]);
+        assert_eq!(names(&editor), before);
+        assert_eq!(editor.status, NOTHING_SELECTED);
+    }
+
+    fn shift_click(editor: &mut Editor, ctx: &egui::Context, pos: Pos2) {
+        for pressed in [true, false] {
+            let input = window(vec![
+                egui::Event::ModifiersChanged(egui::Modifiers::SHIFT),
+                egui::Event::PointerMoved(pos),
+                egui::Event::PointerButton {
+                    pos,
+                    button: egui::PointerButton::Primary,
+                    pressed,
+                    modifiers: egui::Modifiers::SHIFT,
+                },
+            ]);
+            paint_input(editor, ctx, input);
+        }
+        let release = egui::Event::ModifiersChanged(egui::Modifiers::NONE);
+        paint(editor, ctx, vec![release]);
+    }
+
+    fn ctrl(key: egui::Key) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: Some(key),
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::COMMAND,
+        }
+    }
+
     #[test]
     fn dragging_a_title_moves_its_block() {
         let ctx = egui::Context::default();
-        let mut editor = editor("keys");
-        editor.arrange();
-        paint(&mut editor, &ctx, vec![]);
-        let shapes = paint(&mut editor, &ctx, vec![]);
+        let (mut editor, shapes) = drawn_keys(&ctx);
         let block = block_of(&editor, "filter");
         let before = editor.snarl.get_node_info(block).unwrap().pos;
         let start = text_at(&shapes, "filter").center();
@@ -1399,6 +1655,56 @@ mod tests {
         );
         let moved = editor.snarl.get_node_info(block).unwrap().pos - before;
         assert!(moved.length() > 30.0, "moved by {moved:?}");
+    }
+
+    #[test]
+    fn shift_clicked_blocks_duplicate_with_ctrl_d() {
+        let ctx = egui::Context::default();
+        let (mut editor, shapes) = drawn_keys(&ctx);
+        shift_click(&mut editor, &ctx, text_at(&shapes, "filter").center());
+        shift_click(&mut editor, &ctx, text_at(&shapes, "vca").center());
+        let selection = editor.selection(&ctx);
+        assert_eq!(
+            selection,
+            [block_of(&editor, "filter"), block_of(&editor, "vca")]
+        );
+        paint(&mut editor, &ctx, vec![ctrl(egui::Key::D)]);
+        assert!(names(&editor).ends_with(&["filter 2".into(), "vca 2".into()]));
+    }
+
+    #[test]
+    fn copied_blocks_paste_in_the_middle_of_the_view() {
+        let ctx = egui::Context::default();
+        let (mut editor, shapes) = drawn_keys(&ctx);
+        shift_click(&mut editor, &ctx, text_at(&shapes, "osc").center());
+        let output = ctx.run_ui(window(vec![egui::Event::Copy]), |ui| editor.show_graph(ui));
+        let copied = output
+            .platform_output
+            .commands
+            .iter()
+            .find_map(|c| match c {
+                egui::OutputCommand::CopyText(text) => Some(text.clone()),
+                _ => None,
+            })
+            .expect("copied to the clipboard");
+        assert_eq!(Patch::from_json(&copied).unwrap().modules.len(), 1);
+
+        paint(&mut editor, &ctx, vec![egui::Event::Paste(copied)]);
+        assert_eq!(editor.status, "added osc 2");
+        let pos = editor
+            .snarl
+            .get_node_info(block_of(&editor, "osc 2"))
+            .unwrap()
+            .pos;
+        let on_screen = editor.to_global * pos;
+        assert!(
+            (on_screen - editor.view.center()).length() < 1.0,
+            "{on_screen:?} is not in the middle of {:?}",
+            editor.view
+        );
+
+        paint(&mut editor, &ctx, vec![egui::Event::Paste("hello".into())]);
+        assert_eq!(editor.status, "the clipboard holds no blocks");
     }
 
     #[test]
