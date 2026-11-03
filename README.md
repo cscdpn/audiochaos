@@ -12,8 +12,9 @@ through the delay, with random voltages retuning them. `just run bass`
 starts on a plain sequenced bassline instead, a calm base to patch from, and
 `just run groovygroove` on a groovier one. `just run keys` is played from a
 MIDI controller (see [MIDI controllers](#midi-controllers)), and `just run
-chords` too, four notes at once (see [Chords](#chords)). An `input`
-block brings in the sound card's input (see [Audio input](#audio-input)).
+chords` too, four notes at once (see [Chords](#chords)). `just run looper`
+records the sound card's input and loops it (see [Audio input and
+looper](#audio-input-and-looper)).
 
 ### Graphical editor
 
@@ -170,19 +171,26 @@ Some starting points: a pad's gate into `trigger` to fire a drum sound, keys on
 `pitch` and `gate` to play one chromatically, an LFO or noise through `s&h` into
 `start cv` with a short looping `length` to stutter.
 
-### Audio input
+### Audio input and looper
 
 An `input` block brings in the sound card's first two inputs: on a two-input
 interface, the microphone on `1` and the instrument on `2`. Its light shows
 the level. The input is opened at startup if there is one; the status bar says
 why when it is not, for instance when it cannot run at the output's rate.
 
+A `looper` records its `in` for as long as its `record` gate is held, up to
+30 s, then plays the recording like a `sampler`: `start`, `length`, `speed`,
+and `loop`, on by default, or once per `trigger` when turned down. A new
+recording replaces the last one, and recordings are not saved with the patch.
+`just run looper` records input 1 while a key or a pad is held, and loops it
+through a filter and a delay.
+
 - **Latency.** The sound reaches the speakers about two callbacks late, one
   for each stream. `--buffer 128` asks the sound card for smaller callbacks
   than the system's usual 1024 frames (about 21 ms at 48 kHz each). On Linux,
   ALSA's shared devices only take 1024, so the round trip stays near 45 ms;
-  the status bar says so when the card refuses. That is noticeable when playing
-  through the synth: to hear yourself, prefer the
+  the status bar says so when the card refuses. That is fine for looping, but
+  noticeable when playing through the synth: to hear yourself, prefer the
   interface's direct monitor, and use the synth for what it adds.
 - **Feedback.** A microphone near the speakers, plus delay feedback, howls.
   Use headphones, or keep the microphone away and the volume down.
@@ -232,6 +240,7 @@ Module types, as patches and the editor's palette name them:
 | adsr | envelope from a gate: attack, decay, sustain, release |
 | noise | white noise |
 | sampler | plays a slice of a WAV file, once or looping, at any speed |
+| looper | records its input while `record` is held, then plays it like `sampler` |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
 | atten | three attenuverters: each output is its input times -1..1 |
 | osc | sine, saw, square, with through-zero linear FM |
@@ -339,8 +348,8 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
 - The editor uses `eframe` with the glow (OpenGL) backend rather than the
   default wgpu, for far fewer dependencies, and is pinned to 0.36 because the
   node-graph widget, `egui-snarl` 0.12, is built on egui 0.36.
-- Nothing on the audio thread allocates: delay lines are allocated up front
-  and cables live in a fixed-capacity set.
+- Nothing on the audio thread allocates: delay lines and the looper's 30 s
+  are allocated up front, and cables live in a fixed-capacity set.
 - A sound file is read on the UI thread and moved to the audio thread whole;
   the one it replaces comes back the same way as a removed module. The file's
   rate is handled by the playback rate, with linear interpolation, which aliases
@@ -366,7 +375,7 @@ just run          # chaos preset
 just run bass     # bass preset
 just run my.json  # a patch file
 just run --render out.wav --seconds 60   # render to WAV, no sound card
-just run --buffer 128                    # smaller sound card buffers
+just run --buffer 128 looper             # smaller sound card buffers
 just run --midi-monitor                  # what the MIDI controllers send
 just tui          # terminal UI instead of the editor
 just test

@@ -3,12 +3,13 @@
 use crate::patch::Patch;
 
 /// In the same JSON format as saved patches. The first one is the default.
-const PRESETS: [(&str, &str); 5] = [
+const PRESETS: [(&str, &str); 6] = [
     ("chaos", include_str!("../presets/chaos.json")),
     ("bass", include_str!("../presets/bass.json")),
     ("groovygroove", include_str!("../presets/groovygroove.json")),
     ("keys", include_str!("../presets/keys.json")),
     ("chords", include_str!("../presets/chords.json")),
+    ("looper", include_str!("../presets/looper.json")),
 ];
 
 pub fn names() -> impl Iterator<Item = &'static str> {
@@ -27,6 +28,9 @@ pub fn get(name: &str) -> Option<Patch> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::f32::consts::TAU;
+    use std::sync::Arc;
+
     use crate::modules::Context;
     use crate::modules::master;
     use crate::modules::test_util::{rising_zero_crossings, rms};
@@ -117,6 +121,49 @@ mod tests {
         // The release lasts 0.8 s.
         g.render(out, master::OUT, SR as usize);
         assert!(rms(&g.render(out, master::OUT, SR as usize / 10)) < 1e-3);
+    }
+
+    #[test]
+    fn looper_loops_what_came_in_while_a_key_was_held() {
+        use crate::engine::input::{Callbacks, queue};
+        use crate::engine::module::BLOCK;
+        use crate::midi::Parser;
+        let context = Context::new(SR);
+        let (mut g, out) = get("looper").unwrap().build(&context).unwrap();
+        let (mut capture, mut feed) = queue(
+            Arc::clone(&context.input),
+            Arc::new(Callbacks::default()),
+            Arc::default(),
+        );
+        // A 440 Hz tone on input 1, block by block as a sound card would.
+        let mut t = 0;
+        let mut play = |g: &mut crate::engine::graph::Graph, tone: bool, blocks: usize| {
+            let mut audio = Vec::new();
+            for _ in 0..blocks {
+                let frames: Vec<f32> = (t..t + BLOCK)
+                    .flat_map(|i| {
+                        let x = (TAU * 440.0 * i as f32 / SR).sin();
+                        [if tone { 0.5 * x } else { 0.0 }, 0.0]
+                    })
+                    .collect();
+                t += BLOCK;
+                capture.push(&frames, 2);
+                feed.next_block();
+                audio.extend(g.render(out, master::OUT, BLOCK));
+            }
+            audio
+        };
+        let second = SR as usize / BLOCK;
+        assert!(rms(&play(&mut g, true, second)) < 1e-3, "not recording yet");
+        let mut parser = Parser::default();
+        parser.handle(&[0x90, 60, 100], &context.midi);
+        play(&mut g, true, second / 2);
+        parser.handle(&[0x80, 60, 0], &context.midi);
+        // The tone has stopped; the loop goes on.
+        let looped = play(&mut g, false, 2 * second);
+        assert!(rms(&looped) > 0.05, "{}", rms(&looped));
+        let pitch = rising_zero_crossings(&looped[..SR as usize]);
+        assert!(pitch.abs_diff(440) < 15, "{pitch} Hz");
     }
 
     #[test]

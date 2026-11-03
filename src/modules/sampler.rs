@@ -11,13 +11,10 @@ pub const START: usize = 1;
 pub const LENGTH: usize = 2;
 pub const LOOP: usize = 3;
 
-pub static INFO: ModuleInfo = ModuleInfo {
-    name: "sampler",
-    description: "Plays a WAV file, or a slice of it, on each trigger.",
-    inputs: &["trigger"],
-    outputs: &["out"],
-    output_details: &["the sound"],
-    params: &[
+/// Speed, start, length and loop, shared with `looper`, which loops by
+/// default.
+pub(crate) const fn playback(loop_default: f32) -> [ParamInfo; 4] {
+    [
         // Spans as many octaves as an oscillator's `freq`, so a MIDI module's
         // `pitch` plays it in tune too.
         ParamInfo {
@@ -36,7 +33,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 0.0,
             scale: Scale::Linear,
             unit: "",
-            help: "Where the slice starts, as a fraction of the file.",
+            help: "Where the slice starts, as a fraction of the sound.",
         },
         ParamInfo {
             name: "length",
@@ -45,18 +42,27 @@ pub static INFO: ModuleInfo = ModuleInfo {
             default: 1.0,
             scale: Scale::Exponential,
             unit: "",
-            help: "How long the slice is, as a fraction of the file.",
+            help: "How long the slice is, as a fraction of the sound.",
         },
         ParamInfo {
             name: "loop",
             min: 0.0,
             max: 1.0,
-            default: 0.0,
+            default: loop_default,
             scale: Scale::Linear,
             unit: "",
             help: "Past halfway, repeats the slice for as long as it stays there.",
         },
-    ],
+    ]
+}
+
+pub static INFO: ModuleInfo = ModuleInfo {
+    name: "sampler",
+    description: "Plays a WAV file, or a slice of it, on each trigger.",
+    inputs: &["trigger"],
+    outputs: &["out"],
+    output_details: &["the sound"],
+    params: &playback(0.0),
 };
 
 /// Plays a sound file from `start` for `length`, both as fractions of the
@@ -66,9 +72,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
 pub struct Sampler {
     sample_rate: f32,
     sample: Option<Box<Sample>>,
-    position: f64,
-    playing: bool,
-    last_trigger: f32,
+    playhead: Playhead,
 }
 
 impl Sampler {
@@ -76,9 +80,98 @@ impl Sampler {
         Self {
             sample_rate,
             sample: None,
-            position: 0.0,
-            playing: false,
-            last_trigger: 0.0,
+            playhead: Playhead::default(),
+        }
+    }
+}
+
+impl Module for Sampler {
+    fn info(&self) -> &'static ModuleInfo {
+        &INFO
+    }
+
+    fn process(&mut self, inputs: &[Buffer], params: &[Buffer], outputs: &mut [Buffer]) {
+        let (frames, rate) = match &self.sample {
+            Some(sample) => (
+                sample.frames.as_slice(),
+                f64::from(sample.sample_rate) / f64::from(self.sample_rate),
+            ),
+            None => (&[][..], 1.0),
+        };
+        self.playhead
+            .play(frames, rate, &inputs[IN_TRIGGER], params, &mut outputs[OUT]);
+    }
+
+    fn set_sample(&mut self, sample: Box<Sample>) -> Option<Box<Sample>> {
+        self.playhead.stop();
+        self.sample.replace(sample)
+    }
+
+    fn sample(&self) -> Option<&Sample> {
+        self.sample.as_deref()
+    }
+}
+
+/// Where a sound is being played from, for `sampler` and `looper`.
+#[derive(Default)]
+pub(crate) struct Playhead {
+    position: f64,
+    playing: bool,
+    last_trigger: f32,
+    /// How far through its slice it is, 0..1, for a light.
+    progress: f32,
+}
+
+impl Playhead {
+    pub fn stop(&mut self) {
+        self.playing = false;
+    }
+
+    /// 0..1 through the slice while playing, else `None`.
+    pub fn progress(&self) -> Option<f32> {
+        self.playing.then_some(self.progress)
+    }
+
+    /// Plays a block of `frames`, `rate` of them per sample at speed 1, with
+    /// `params` laid out as [`playback`] makes them.
+    pub fn play(
+        &mut self,
+        frames: &[f32],
+        rate: f64,
+        trigger: &Buffer,
+        params: &[Buffer],
+        out: &mut Buffer,
+    ) {
+        if frames.is_empty() {
+            self.last_trigger = trigger[BLOCK - 1];
+            out.fill(0.0);
+            return;
+        }
+        let total = frames.len() as f64;
+        for (i, out) in out.iter_mut().enumerate() {
+            let start = f64::from(params[START][i]) * total;
+            let end = (start + f64::from(params[LENGTH][i]) * total).min(total);
+            let looping = params[LOOP][i] > 0.5;
+
+            let edge = self.last_trigger <= 0.0 && trigger[i] > 0.0;
+            self.last_trigger = trigger[i];
+            if edge || (looping && !self.playing) {
+                self.position = start;
+                self.playing = true;
+            }
+
+            if !self.playing {
+                *out = 0.0;
+                continue;
+            }
+            *out = read(frames, self.position);
+            self.progress = ((self.position - start) / (end - start).max(1.0)) as f32;
+            self.position += f64::from(params[SPEED][i]) * rate;
+            // `start` and `length` may have moved under the playhead.
+            if self.position >= end || self.position >= total {
+                self.position = start;
+                self.playing = looping;
+            }
         }
     }
 }
@@ -90,56 +183,6 @@ fn read(frames: &[f32], position: f64) -> f32 {
     let current = frames.get(index).copied().unwrap_or(0.0);
     let next = frames.get(index + 1).copied().unwrap_or(0.0);
     current + (next - current) * fraction
-}
-
-impl Module for Sampler {
-    fn info(&self) -> &'static ModuleInfo {
-        &INFO
-    }
-
-    fn process(&mut self, inputs: &[Buffer], params: &[Buffer], outputs: &mut [Buffer]) {
-        let Some(sample) = self.sample.as_ref().filter(|s| !s.frames.is_empty()) else {
-            self.last_trigger = inputs[IN_TRIGGER][BLOCK - 1];
-            outputs[OUT].fill(0.0);
-            return;
-        };
-        let total = sample.frames.len() as f64;
-        let rate = f64::from(sample.sample_rate) / f64::from(self.sample_rate);
-        for (i, out) in outputs[OUT].iter_mut().enumerate() {
-            let trigger = inputs[IN_TRIGGER][i];
-            let start = f64::from(params[START][i]) * total;
-            let end = (start + f64::from(params[LENGTH][i]) * total).min(total);
-            let looping = params[LOOP][i] > 0.5;
-
-            let edge = self.last_trigger <= 0.0 && trigger > 0.0;
-            self.last_trigger = trigger;
-            if edge || (looping && !self.playing) {
-                self.position = start;
-                self.playing = true;
-            }
-
-            if !self.playing {
-                *out = 0.0;
-                continue;
-            }
-            *out = read(&sample.frames, self.position);
-            self.position += f64::from(params[SPEED][i]) * rate;
-            // `start` and `length` may have moved under the playhead.
-            if self.position >= end || self.position >= total {
-                self.position = start;
-                self.playing = looping;
-            }
-        }
-    }
-
-    fn set_sample(&mut self, sample: Box<Sample>) -> Option<Box<Sample>> {
-        self.playing = false;
-        self.sample.replace(sample)
-    }
-
-    fn sample(&self) -> Option<&Sample> {
-        self.sample.as_deref()
-    }
 }
 
 #[cfg(test)]

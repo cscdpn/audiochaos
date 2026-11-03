@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "description": "A live looper: hold a key, or a pad, to record input 1 of the sound card (a mic or a guitar), let go and it loops through a filter and a delay. Knob 1 moves where the loop starts, knob 2 the cutoff, knob 3 the delay feedback. Hear yourself with the interface's direct monitor rather than through the synth.",
+  "modules": [
+    { "name": "input", "type": "input" },
+    { "name": "midi", "type": "midi" },
+    { "name": "looper", "type": "looper" },
+    { "name": "filter", "type": "filter" },
+    { "name": "delay", "type": "delay" },
+    { "name": "master", "type": "master" }
+  ],
+  "knobs": {
+    "looper": { "speed": 1.0, "start": 0.0, "length": 1.0, "loop": 1.0 },
+    "filter": { "cutoff": 3000.0, "resonance": 0.3 },
+    "delay": { "time": 0.375, "feedback": 0.4, "mix": 0.3 },
+    "master": { "volume": 0.6 }
+  },
+  "cables": [
+    { "from": "input", "output": "1", "to": "looper", "input": "in" },
+    { "from": "midi", "output": "gate", "to": "looper", "input": "record" },
+    { "from": "midi", "output": "knob 1", "to": "looper", "input": "start cv" },
+    { "from": "looper", "output": "out", "to": "filter", "input": "in" },
+    { "from": "midi", "output": "knob 2", "to": "filter", "input": "cutoff cv" },
+    { "from": "filter", "output": "lowpass", "to": "delay", "input": "in" },
+    { "from": "midi", "output": "knob 3", "to": "delay", "input": "feedback cv" },
+    { "from": "delay", "output": "out", "to": "master", "input": "in" }
+  ]
+}
