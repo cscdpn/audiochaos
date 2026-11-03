@@ -395,3 +395,9 @@ takes over, after a few harmless `ALSA lib` lines on the terminal.
 
 The header shows an audio error count. One error at startup is normal with
 the ALSA backend; a count that keeps rising means buffer underruns.
+
+## License
+
+MIT, see [LICENSE](LICENSE): do what you like with it. Most of the code was
+written with an AI assistant (Claude), and it comes as is, with no warranty of
+any kind.
