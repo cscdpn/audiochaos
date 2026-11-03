@@ -430,7 +430,10 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
     ) {
         let id = snarl[block];
         let description = self.controller.node(id).info.description;
-        ui.label(self.title(&id)).on_hover_text(description);
+        // Not selectable, else the title takes the clicks and drags that
+        // select and move the block.
+        ui.add(egui::Label::new(self.title(&id)).selectable(false))
+            .on_hover_text(description);
         if let Some(brightness) = self.controller.led(id) {
             led(brightness, ui);
         }
@@ -1366,6 +1369,36 @@ mod tests {
             engine.next_sample();
         }
         assert!(editor.moves());
+    }
+
+    #[test]
+    fn dragging_a_title_moves_its_block() {
+        let ctx = egui::Context::default();
+        let mut editor = editor("keys");
+        editor.arrange();
+        paint(&mut editor, &ctx, vec![]);
+        let shapes = paint(&mut editor, &ctx, vec![]);
+        let block = block_of(&editor, "filter");
+        let before = editor.snarl.get_node_info(block).unwrap().pos;
+        let start = text_at(&shapes, "filter").center();
+        let end = start + egui::vec2(60.0, 40.0);
+        paint(&mut editor, &ctx, vec![egui::Event::PointerMoved(start)]);
+        paint(
+            &mut editor,
+            &ctx,
+            vec![click(start, egui::PointerButton::Primary, true)],
+        );
+        for step in 1..=4 {
+            let pos = start + (end - start) * (step as f32 / 4.0);
+            paint(&mut editor, &ctx, vec![egui::Event::PointerMoved(pos)]);
+        }
+        paint(
+            &mut editor,
+            &ctx,
+            vec![click(end, egui::PointerButton::Primary, false)],
+        );
+        let moved = editor.snarl.get_node_info(block).unwrap().pos - before;
+        assert!(moved.length() > 30.0, "moved by {moved:?}");
     }
 
     #[test]
