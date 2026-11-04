@@ -245,7 +245,7 @@ Module types, as patches and the editor's palette name them:
 | midi | a MIDI controller's keyboard, pads and knobs as voltages |
 | poly | the keyboard as four voices, for chords |
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
-| seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs |
+| seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs, started and stopped by `run` |
 | lfo | slow sine, triangle, saw and square |
 | adsr | envelope from a gate: attack, decay, sustain, release |
 | noise | white noise |
@@ -290,6 +290,13 @@ the clock and ignore their `time` or `rate` knob, CV included:
 - `lfo`: one cycle per tick, restarting on each, so it stays in time.
 - `seq`: each tick moves to the next step, starting from the first, and `gate`
   follows the clock.
+
+`seq` also has a `run` knob: past halfway it plays, below it stops, holding
+its step with the gate closed, and each start starts over from the first
+step. With `run` at 0, a signal in `run cv` starts and stops it, which
+sequences sequencers: a slow `seq` whose steps are 1 or 0 decides which
+bars a faster one plays. Clocked, a sequencer started on a tick plays its
+first step on that tick, and one started between ticks waits for the next.
 
 A tick is a rise above 0, so any gate or square clocks them. A `clock` block
 gives one tempo to all of them: for echoes on the dotted eighth over a

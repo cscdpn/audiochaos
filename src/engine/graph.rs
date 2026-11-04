@@ -12,9 +12,9 @@ pub const MAX_CABLES: usize = 256;
 /// Modules live in this many slots, allocated once for the same reason.
 pub const MAX_MODULES: usize = 64;
 
-/// The most knobs a module has (the sequencer's rate and eight steps), so
+/// The most knobs a module has (the sequencer's rate, eight steps and run), so
 /// the UI can be shown every knob's modulated value in a fixed-size table.
-pub const MAX_PARAMS: usize = 9;
+pub const MAX_PARAMS: usize = 10;
 
 /// Every input is clamped to ±RAIL, like the power rails of a hardware
 /// modular, and NaN reads as 0. Feedback loops through VCAs multiply without

@@ -11,6 +11,7 @@ pub const OUT_GATE: usize = 1;
 
 pub const RATE: usize = 0;
 pub const STEPS: usize = 8;
+pub const RUN: usize = 1 + STEPS;
 
 /// Parameter index of a step's value.
 pub const fn step(n: usize) -> usize {
@@ -31,7 +32,7 @@ const fn step_param(name: &'static str) -> ParamInfo {
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "seq",
-    description: "Eight-step CV sequencer, on its own clock or stepped by `clock`.",
+    description: "Eight-step CV sequencer, on its own clock or stepped by `clock`. `run` starts and stops it: patch another seq's `cv` into `run cv` to sequence sequencers.",
     inputs: &["clock"],
     outputs: &["cv", "gate"],
     output_details: &["step, ±1", "0 or 1"],
@@ -53,6 +54,15 @@ pub static INFO: ModuleInfo = ModuleInfo {
         step_param("step 6"),
         step_param("step 7"),
         step_param("step 8"),
+        ParamInfo {
+            name: "run",
+            min: 0.0,
+            max: 1.0,
+            default: 1.0,
+            scale: Scale::Linear,
+            unit: "",
+            help: "Plays past halfway, stops below. Starting again starts from the first step. With the knob at 0, a gate or another seq's `cv` in `run cv` starts and stops it.",
+        },
     ],
 };
 
@@ -60,12 +70,16 @@ pub static INFO: ModuleInfo = ModuleInfo {
 ///
 /// With a cable in `clock`, each clock tick moves to the next step instead,
 /// starting from the first, and `gate` follows the clock: `rate` is ignored.
+///
+/// While `run` is low it holds its step with the gate closed, and when `run`
+/// rises it starts over from the first step.
 pub struct Sequencer {
     sample_rate: f32,
     /// Position in steps, 0..STEPS.
     position: f32,
     clock: ClockIn,
     clocked: bool,
+    running: bool,
     gate: f32,
 }
 
@@ -76,8 +90,23 @@ impl Sequencer {
             position: 0.0,
             clock: ClockIn::default(),
             clocked: false,
+            // So that a sequencer running from the start does not start over
+            // on its first sample, which would skip its first clock tick.
+            running: true,
             gate: 0.0,
         }
+    }
+
+    /// Back to the first step. A clocked sequencer plays it at once if the
+    /// clock is high, since the tick that went with it may have come a block
+    /// earlier, when another module started it a block late; else it plays
+    /// it on the next tick.
+    fn start_over(&mut self, clock: f32) {
+        self.position = if self.clocked && clock <= 0.0 {
+            (STEPS - 1) as f32
+        } else {
+            0.0
+        };
     }
 }
 
@@ -92,9 +121,14 @@ impl Module for Sequencer {
         };
         for i in 0..cv.len() {
             let clock = inputs[IN_CLOCK][i];
-            if self.clock.tick(clock) && self.clocked {
+            let ticked = self.clock.tick(clock);
+            let running = params[RUN][i] > 0.5;
+            if running && !self.running {
+                self.start_over(clock);
+            } else if running && ticked && self.clocked {
                 self.position = (self.position.floor() + 1.0) % STEPS as f32;
             }
+            self.running = running;
             let current = self.position as usize;
             cv[i] = params[step(current)][i];
             let high = if self.clocked {
@@ -102,8 +136,8 @@ impl Module for Sequencer {
             } else {
                 self.position.fract() < 0.5
             };
-            gate[i] = if high { 1.0 } else { 0.0 };
-            if !self.clocked {
+            gate[i] = if high && running { 1.0 } else { 0.0 };
+            if running && !self.clocked {
                 self.position = (self.position + params[RATE][i] / self.sample_rate) % STEPS as f32;
             }
         }
@@ -135,7 +169,24 @@ mod tests {
     fn params() -> Vec<f32> {
         let mut p = vec![RATE_ONE_STEP_PER_BLOCK];
         p.extend((0..STEPS).map(|n| n as f32 / 10.0));
+        p.push(1.0);
         p
+    }
+
+    fn stopped() -> Vec<f32> {
+        let mut p = params();
+        p[RUN] = 0.0;
+        p
+    }
+
+    /// The step played at the start of each of `blocks` blocks.
+    fn steps(seq: &mut Sequencer, clock: f32, params: &[f32], blocks: usize) -> Vec<usize> {
+        (0..blocks)
+            .map(|_| {
+                let cv = run_signal(seq, &[[clock; BLOCK]], params, OUT_CV, 1);
+                (cv[1] * 10.0).round() as usize
+            })
+            .collect()
     }
 
     #[test]
@@ -181,6 +232,108 @@ mod tests {
         }
         let expected: Vec<usize> = (0..steps.len()).map(|b| (b / 2) % STEPS).collect();
         assert_eq!(steps, expected);
+    }
+
+    #[test]
+    fn stopped_it_holds_its_step_with_the_gate_closed() {
+        let mut seq = Sequencer::new(SR);
+        assert_eq!(steps(&mut seq, 0.0, &params(), 3), [0, 1, 2]);
+        assert_eq!(steps(&mut seq, 0.0, &stopped(), 3), [3, 3, 3]);
+        let gate = run(&mut seq, &[0.0], &stopped(), OUT_GATE, 2);
+        assert!(gate.iter().all(|&g| g == 0.0));
+        assert_eq!(seq.led(), Some(0.0));
+    }
+
+    #[test]
+    fn started_again_it_starts_from_the_first_step() {
+        let mut seq = Sequencer::new(SR);
+        steps(&mut seq, 0.0, &params(), 3);
+        steps(&mut seq, 0.0, &stopped(), 1);
+        assert_eq!(steps(&mut seq, 0.0, &params(), 3), [0, 1, 2]);
+    }
+
+    #[test]
+    fn a_seq_that_starts_running_starts_on_its_first_step() {
+        let mut seq = Sequencer::new(SR);
+        seq.set_plugged(IN_CLOCK, true);
+        // Waiting for the first tick, then stepping on each.
+        let ticks = [0.0, 1.0, 0.0, 1.0];
+        let played: Vec<usize> = ticks
+            .iter()
+            .map(|&clock| steps(&mut seq, clock, &params(), 1)[0])
+            .collect();
+        assert_eq!(played, [STEPS - 1, 0, 0, 1]);
+    }
+
+    #[test]
+    fn a_clocked_seq_started_on_a_tick_plays_its_first_step_on_that_tick() {
+        let mut seq = Sequencer::new(SR);
+        seq.set_plugged(IN_CLOCK, true);
+        for clock in [1.0, 0.0, 1.0, 0.0] {
+            steps(&mut seq, clock, &params(), 1);
+        }
+        steps(&mut seq, 0.0, &stopped(), 1);
+        // Started with the tick, or a block after it while the clock is high.
+        let mut late = Sequencer::new(SR);
+        late.set_plugged(IN_CLOCK, true);
+        steps(&mut late, 0.0, &stopped(), 1);
+        steps(&mut late, 1.0, &stopped(), 1);
+        for seq in [&mut seq, &mut late] {
+            let played: Vec<usize> = [1.0, 1.0, 0.0, 1.0, 0.0]
+                .iter()
+                .map(|&clock| steps(seq, clock, &params(), 1)[0])
+                .collect();
+            assert_eq!(played, [0, 0, 0, 1, 1]);
+        }
+    }
+
+    #[test]
+    fn a_clocked_seq_started_between_ticks_waits_for_the_next() {
+        let mut seq = Sequencer::new(SR);
+        seq.set_plugged(IN_CLOCK, true);
+        for clock in [1.0, 0.0, 1.0, 0.0] {
+            steps(&mut seq, clock, &params(), 1);
+        }
+        steps(&mut seq, 0.0, &stopped(), 1);
+        let gate = run_signal(&mut seq, &[[0.0; BLOCK]], &params(), OUT_GATE, 1);
+        assert!(gate.iter().all(|&g| g == 0.0));
+        assert_eq!(steps(&mut seq, 1.0, &params(), 1), [0]);
+    }
+
+    #[test]
+    fn one_seq_starts_and_stops_another() {
+        use crate::engine::graph::{Cable, Graph};
+
+        // The rate knob tops out at 50 steps per second: one step per block
+        // at this rate.
+        let sr = 50.0 * BLOCK as f32;
+        let mut g = Graph::new(sr);
+        let song = g.add("song", Box::new(Sequencer::new(sr)));
+        let riff = g.add("riff", Box::new(Sequencer::new(sr)));
+        // The song plays one step every four blocks: on, off, on, off...
+        g.init_param(song, RATE, 50.0 / 4.0);
+        for n in 0..STEPS {
+            g.init_param(song, step(n), if n % 2 == 0 { 1.0 } else { 0.0 });
+        }
+        g.init_param(riff, RATE, 50.0);
+        for n in 0..STEPS {
+            g.init_param(riff, step(n), n as f32 / 10.0);
+        }
+        g.init_param(riff, RUN, 0.0);
+        g.connect(Cable {
+            from: song,
+            from_port: OUT_CV,
+            to: riff,
+            to_port: INFO.cv_port(RUN),
+        })
+        .unwrap();
+        let played: Vec<usize> = (0..12)
+            .map(|_| {
+                g.process();
+                (g.output(riff, OUT_CV)[1] * 10.0).round() as usize
+            })
+            .collect();
+        assert_eq!(played, [0, 1, 2, 3, 4, 4, 4, 4, 0, 1, 2, 3]);
     }
 
     #[test]
