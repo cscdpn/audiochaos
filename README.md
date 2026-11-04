@@ -72,7 +72,9 @@ The same synth runs as a VST3 and CLAP instrument in a DAW: Ardour, Reaper,
 Bitwig and others. It is tested on Linux; on Windows it compiles but has not
 been tried in a host yet. `just install-plugin` builds both and
 copies them to `~/.vst3` and `~/.clap`, where Linux hosts look; on Windows,
-copy `target/bundled/audiochaos.vst3` to `C:\Program Files\Common Files\VST3`.
+build them with `just bundle` and copy `target/bundled/audiochaos.vst3` to
+`C:\Program Files\Common Files\VST3` and `audiochaos.clap` to
+`C:\Program Files\Common Files\CLAP`.
 Ardour only loads VST3; Reaper and Bitwig take either.
 
 - The plugin's window is the node editor, with the **Patch** menu and
