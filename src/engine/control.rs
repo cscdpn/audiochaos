@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fmt;
 use std::mem;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use rtrb::{Consumer, Producer, RingBuffer};
 
@@ -12,6 +12,10 @@ use super::graph::{
 use super::input::Feed;
 use super::module::{BLOCK, Module, ModuleInfo};
 use super::sample::Sample;
+
+/// How long the sound takes to fade in or out when the engine starts or
+/// stops: long enough to avoid a click, short enough to feel instant.
+const FADE_SECONDS: f32 = 0.01;
 
 enum Command {
     SetParam {
@@ -143,9 +147,23 @@ pub struct Controller {
     nodes: Vec<NodeState>,
     cables: CableSet,
     readings: Arc<Readings>,
+    running: Arc<AtomicBool>,
 }
 
 impl Controller {
+    /// Whether the engine plays, or is stopped.
+    pub fn running(&self) -> bool {
+        self.running.load(Ordering::Relaxed)
+    }
+
+    /// Stops the engine, or starts it again where it stopped: a stopped
+    /// engine fades out, then computes nothing, so everything holds still,
+    /// sequencers and delay tails included. It still takes changes. An
+    /// atomic rather than a command, so it works even if the queue is full.
+    pub fn set_running(&self, running: bool) {
+        self.running.store(running, Ordering::Relaxed);
+    }
+
     /// How bright a module's light was at the end of the last block played,
     /// if it has one. None before the first block.
     pub fn led(&self, id: NodeId) -> Option<f32> {
@@ -347,6 +365,11 @@ pub struct Engine {
     position: usize,
     readings: Arc<Readings>,
     input: Option<Feed>,
+    running: Arc<AtomicBool>,
+    /// The output's gain, 0 to 1, fading towards 1 while running and 0 while
+    /// stopped. Once it reaches 0 the graph stops being processed.
+    level: f32,
+    fade_step: f32,
 }
 
 impl Engine {
@@ -356,6 +379,7 @@ impl Engine {
         let (retired_producer, retired_consumer) = RingBuffer::new(queue_capacity);
         let (nodes, cables) = mirror(&graph);
         let readings = Arc::new(Readings::default());
+        let running = Arc::new(AtomicBool::new(true));
         let controller = Controller {
             sample_rate: graph.sample_rate(),
             output,
@@ -364,7 +388,9 @@ impl Engine {
             nodes,
             cables,
             readings: Arc::clone(&readings),
+            running: Arc::clone(&running),
         };
+        let fade_step = 1.0 / (FADE_SECONDS * graph.sample_rate());
         let engine = Self {
             graph: Box::new(graph),
             output,
@@ -373,6 +399,9 @@ impl Engine {
             position: BLOCK,
             readings,
             input: None,
+            running,
+            level: 1.0,
+            fade_step,
         };
         (engine, controller)
     }
@@ -383,16 +412,25 @@ impl Engine {
     }
 
     pub fn next_sample(&mut self) -> f32 {
+        let running = self.running.load(Ordering::Relaxed);
         if self.position == BLOCK {
             self.apply_commands();
+            // Read even when stopped, so the input queue does not overflow.
             if let Some(input) = &mut self.input {
                 input.next_block();
             }
-            self.graph.process();
-            self.publish_readings();
+            if running || self.level > 0.0 {
+                self.graph.process();
+                self.publish_readings();
+            }
             self.position = 0;
         }
-        let sample = self.graph.output(self.output, 0)[self.position];
+        self.level = if running {
+            (self.level + self.fade_step).min(1.0)
+        } else {
+            (self.level - self.fade_step).max(0.0)
+        };
+        let sample = self.graph.output(self.output, 0)[self.position] * self.level;
         self.position += 1;
         sample
     }
@@ -536,6 +574,60 @@ mod tests {
         controller.remove(amp).unwrap();
         run_block(&mut engine);
         assert_eq!(controller.modulated(amp, vca::GAIN), None);
+    }
+
+    #[test]
+    fn a_stopped_engine_fades_out_holds_still_and_starts_again_where_it_was() {
+        use crate::modules::lfo::{self, Lfo};
+
+        let mut graph = Graph::new(SR);
+        let lfo = graph.add("lfo", Box::new(Lfo::new(SR)));
+        let out = graph.add("master", Box::new(Master));
+        graph.set_param(lfo, lfo::RATE, 1.0);
+        graph
+            .connect(Cable {
+                from: lfo,
+                from_port: lfo::OUT_SAW,
+                to: out,
+                to_port: master::IN,
+            })
+            .unwrap();
+        let (mut engine, controller) = Engine::new(graph, out, 8);
+        let fade = (FADE_SECONDS * SR) as usize;
+        for _ in 0..fade {
+            engine.next_sample();
+        }
+        assert!(controller.running());
+        controller.set_running(false);
+        let fading: Vec<f32> = (0..fade).map(|_| engine.next_sample()).collect();
+        assert!(fading[0].abs() > 0.01, "still heard at first");
+        assert!(fading.windows(2).all(|w| w[1].abs() <= w[0].abs() + 1e-6));
+        let held = engine.graph.output(lfo, lfo::OUT_SAW)[0];
+        for _ in 0..10 * BLOCK {
+            assert_eq!(engine.next_sample(), 0.0);
+        }
+        assert_eq!(
+            engine.graph.output(lfo, lfo::OUT_SAW)[0],
+            held,
+            "not processed"
+        );
+
+        controller.set_running(true);
+        run_block(&mut engine);
+        let resumed = engine.graph.output(lfo, lfo::OUT_SAW)[0];
+        assert!((resumed - held).abs() < 0.01, "{held} then {resumed}");
+        assert!(engine.next_sample().abs() > 0.0);
+    }
+
+    #[test]
+    fn a_stopped_engine_still_takes_changes() {
+        let (mut engine, mut controller, _, out) = engine(2);
+        controller.set_running(false);
+        for _ in 0..4 {
+            controller.set_param(out, master::VOLUME, 0.2).unwrap();
+            run_block(&mut engine);
+        }
+        assert!((engine.graph.param(out, master::VOLUME) - 0.2).abs() < 1e-6);
     }
 
     #[test]

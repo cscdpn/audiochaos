@@ -21,7 +21,8 @@ pub fn draw(frame: &mut Frame, app: &App, audio_errors: usize, recording: Option
     ])
     .areas(frame.area());
 
-    draw_header(frame, header, app.screen, audio_errors, recording);
+    let running = app.controller.running();
+    draw_header(frame, header, app.screen, running, audio_errors, recording);
     match app.screen {
         Screen::Knobs => draw_knobs(frame, body, app),
         Screen::Patch => draw_patch(frame, body, app),
@@ -33,6 +34,7 @@ fn draw_header(
     frame: &mut Frame,
     area: Rect,
     screen: Screen,
+    running: bool,
     audio_errors: usize,
     recording: Option<Duration>,
 ) {
@@ -49,6 +51,9 @@ fn draw_header(
         tab("Patch", screen == Screen::Patch),
         format!("   audio errors: {audio_errors}").dim(),
     ]);
+    if !running {
+        line.push_span("   ■ STOPPED".bold());
+    }
     if let Some(elapsed) = recording {
         line.push_span(format!("   ● REC {}", clock(elapsed)).red().bold());
     }
@@ -163,10 +168,10 @@ fn draw_column(
 fn draw_footer(frame: &mut Frame, area: Rect, app: &App) {
     let help = match app.screen {
         Screen::Knobs => {
-            "↑↓ select   ←→ turn   shift+←→ or H/L turn faster   Tab patch   r record   q quit"
+            "↑↓ select   ←→ turn   shift+←→ or H/L turn faster   Tab patch   s stop/start   r record   q quit"
         }
         Screen::Patch => {
-            "←→ outputs/inputs   ↑↓ select   Enter connect/disconnect   Tab knobs   r record   q quit"
+            "←→ outputs/inputs   ↑↓ select   Enter connect/disconnect   Tab knobs   s stop/start   r record   q quit"
         }
     };
     let text = vec![Line::from(app.status.clone()), Line::from(help).dim()];
@@ -236,5 +241,12 @@ mod tests {
         assert!(patch.contains("● REC 1:12"));
         assert!(patch.contains("osc 1 › saw"));
         assert!(patch.contains("filter › cutoff cv"));
+        assert!(!patch.contains("STOPPED"));
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        assert!(!app.controller.running());
+        assert!(render(&app, None).contains("■ STOPPED"));
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        assert!(app.controller.running());
     }
 }

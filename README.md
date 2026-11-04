@@ -53,6 +53,9 @@ the knobs.
   runs at, CV and clock included, which the slider does not show: `lfo` and
   the modulation effects glow with their LFO (the univibe with its lamp),
   `delay` flashes on each echo, `clock` on each beat, `seq` with its gate.
+- **⏸ Stop** silences the synth and holds everything still, sequencers and
+  delay tails included; **▶ Start** plays on from there. Both fade over 10 ms,
+  so neither clicks. Edits still apply while stopped.
 - **● Rec** records what you hear (see [Recording](#recording)).
 
 ### Terminal UI
@@ -67,6 +70,7 @@ or remove modules.
   columns, `↑↓` select, `Enter` connects the selected output to the selected
   input, or disconnects it if already connected. In the inputs column, `●`
   marks a cable from the selected output and `○` a cable from elsewhere.
+- `s` stops or starts the synth, as **Stop** does in the editor.
 - `r` starts or stops recording.
 - `q` or `Esc` quits.
 
@@ -358,6 +362,10 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
   queue then catches up at once, or waits to refill, with a click, rather
   than letting the latency grow. The input is not resampled: it must run at
   the output's rate.
+- Stopping the engine is an atomic flag rather than a queued command, so it
+  works even when the queue is full. A stopped engine still drains the queue
+  and the input, so edits apply and the input never overflows; it only skips
+  computing the graph once the fade is done.
 - Live recording follows the same rule: the audio thread copies samples into
   a second lock-free queue, and a writer thread empties it to disk. The queue
   holds a second of audio; if the disk stalls longer, samples are dropped and

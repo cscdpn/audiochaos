@@ -84,6 +84,7 @@ impl eframe::App for GuiApp {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("Patch", |ui| self.patch_menu(ui));
                 ui.separator();
+                self.run_button(ui);
                 self.record_button(ui);
                 ui.separator();
                 ui.label(&self.editor.status);
@@ -144,6 +145,18 @@ impl GuiApp {
             && let Some((patch, _)) = self.read_patch()
         {
             self.editor.paste(&patch);
+        }
+    }
+
+    fn run_button(&mut self, ui: &mut egui::Ui) {
+        let controller = &self.editor.controller;
+        let (label, tip) = if controller.running() {
+            ("⏸ Stop", "Silences the synth and holds everything still")
+        } else {
+            ("▶ Start", "Plays again from where it stopped")
+        };
+        if ui.button(label).on_hover_text(tip).clicked() {
+            controller.set_running(!controller.running());
         }
     }
 

@@ -93,6 +93,11 @@ impl App {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.quit = true,
             _ if ctrl_c => self.quit = true,
+            KeyCode::Char('s') => {
+                let running = !self.controller.running();
+                self.controller.set_running(running);
+                self.status = if running { "playing" } else { "stopped" }.to_string();
+            }
             KeyCode::Tab => {
                 self.screen = match self.screen {
                     Screen::Knobs => Screen::Patch,
