@@ -4,14 +4,13 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::{env, fs, io};
 
-use audiochaos::engine::control::Engine;
-use audiochaos::engine::{audio, record};
+use audiochaos::engine::record;
 use audiochaos::midi;
 use audiochaos::modules::Context;
 use audiochaos::patch::{self, Patch};
+use audiochaos::session::{self, Devices};
 use audiochaos::tui::{self, App};
 use audiochaos::{gui, presets};
-use cpal::BufferSize;
 
 const USAGE: &str = "usage: audiochaos [--tui] [--buffer FRAMES] [preset | patch.json]
        audiochaos --render out.wav [--seconds N] [preset | patch.json]
@@ -32,10 +31,6 @@ without opening the sound card.
 const DEFAULT_RENDER_SECONDS: f32 = 30.0;
 /// The sound card's rate is unknown, and irrelevant, when rendering offline.
 const RENDER_SAMPLE_RATE: f32 = 48_000.0;
-
-/// Room for a burst of key presses, or a whole patch being loaded, even if
-/// the audio thread stalls briefly.
-const COMMAND_QUEUE_CAPACITY: usize = 1024;
 
 fn main() -> ExitCode {
     // Returning the error from `main` would print it with `Debug`, quotes and
@@ -137,49 +132,25 @@ fn run() -> Result<(), Box<dyn Error>> {
         println!("wrote {seconds} s to {}", path.display());
         return Ok(());
     }
-    let (device, config) = audio::default_output(args.buffer)?;
-    let context = Context::new(config.sample_rate as f32);
-    // A missing MIDI setup is no reason not to play.
-    let (_midi_inputs, mut status) = match midi::connect(&context.midi) {
-        Ok(inputs) if inputs.names.is_empty() => (Some(inputs), "no MIDI controller".to_string()),
-        Ok(inputs) => {
-            let status = format!("MIDI: {}", inputs.names.join(", "));
-            (Some(inputs), status)
-        }
-        Err(e) => (None, format!("no MIDI: {e}")),
+    let midi_state = Arc::new(midi::State::default());
+    let (midi_inputs, midi_status) = session::connect_midi(&midi_state);
+    let devices = Devices {
+        buffer: args.buffer,
+        ..Devices::default()
     };
-    let (graph, output) = patch.build(&context)?;
-    for problem in patch::sample_problems(&graph) {
-        status = format!("{status}; {problem}");
-    }
-    let (engine, controller) = Engine::new(graph, output, COMMAND_QUEUE_CAPACITY);
-    let (tap, recorder) = record::tap(config.sample_rate);
-    if let Some(frames) = args.buffer
-        && config.buffer_size == BufferSize::Default
-    {
-        status = format!("{status}; the sound card refused a buffer of {frames} frames");
-    }
-    let input = match audio::default_input(config.sample_rate, args.buffer) {
-        Ok((device, input_config)) => Some(audio::Input {
-            device,
-            config: input_config,
-            live: Arc::clone(&context.input),
-        }),
-        Err(e) => {
-            status = format!("{status}; no audio input: {e}");
-            None
-        }
-    };
-    let playback = audio::play(&device, config, engine, tap, input)?;
-    if let Some(e) = playback.input_problem() {
-        status = format!("{status}; no audio input: {e}");
-    }
+    let session = session::start(&patch, &devices, &midi_state)?;
+    let status = [midi_status]
+        .into_iter()
+        .chain(session.problems.iter().cloned())
+        .collect::<Vec<_>>()
+        .join("; ");
     if args.tui {
-        let mut app = App::new(controller);
+        let _midi_inputs = midi_inputs;
+        let mut app = App::new(session.controller);
         app.status = status;
-        tui::run(app, &playback, recorder)?;
+        tui::run(app, &session.playback, session.recorder)?;
     } else {
-        gui::run(controller, context, &patch, playback, recorder, status)?;
+        gui::run(session, devices, midi_inputs, &patch, status)?;
     }
     Ok(())
 }

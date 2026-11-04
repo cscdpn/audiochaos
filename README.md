@@ -57,6 +57,13 @@ the knobs.
   delay tails included; **▶ Start** plays on from there. Both fade over 10 ms,
   so neither clicks. Edits still apply while stopped.
 - **● Rec** records what you hear (see [Recording](#recording)).
+- **Audio** menu: pick the output and the input among the sound cards plugged
+  in now, for when the synth started before the interface was plugged in, and
+  **Reconnect MIDI controllers** plugged in since. Switching sound cards
+  builds the patch again on the new card, which may run at another rate: knobs,
+  cables and sounds stay, but sequencers start over and loopers forget their
+  recording; a running recording is saved. If the card does not open, the
+  synth plays on where it was.
 
 ### Terminal UI
 
@@ -116,7 +123,8 @@ file.
 ### MIDI controllers
 
 Every MIDI controller plugged in at startup plays the `midi` modules; the
-status bar names the ones found. `just run keys` is a ready-made patch:
+status bar names the ones found. In the editor, **Audio › Reconnect MIDI
+controllers** picks up those plugged in later. `just run keys` is a ready-made patch:
 keys play a filtered saw, knobs 1 to 4 sweep the cutoff, resonance, delay
 feedback and self-FM, and pad 1 fires a noise burst.
 
@@ -189,8 +197,9 @@ Some starting points: a pad's gate into `trigger` to fire a drum sound, keys on
 
 An `input` block brings in the sound card's first two inputs: on a two-input
 interface, the microphone on `1` and the instrument on `2`. Its light shows
-the level. The input is opened at startup if there is one; the status bar says
-why when it is not, for instance when it cannot run at the output's rate.
+the level. The input is opened at startup if there is one, or picked in the
+editor's **Audio** menu; the status bar says why when it is not, for instance
+when it cannot run at the output's rate.
 
 A `looper` records its `in` for as long as its `record` gate is held, up to
 30 s, then plays the recording like a `sampler`: `start`, `length`, `speed`,
@@ -416,7 +425,10 @@ slow and risked audio dropouts.
 
 A USB controller plugged in at boot can become ALSA's card 0, the system
 default, although it has no audio output. The first sound card that opens then
-takes over, after a few harmless `ALSA lib` lines on the terminal.
+takes over, after a few harmless `ALSA lib` lines on the terminal. On Linux,
+the **Audio** menu lists each card's own default device, which shares the card
+with other programs; ALSA's other entries for the same card are exclusive,
+surround layouts or HDMI.
 
 The header shows an audio error count. One error at startup is normal with
 the ALSA backend; a count that keeps rising means buffer underruns.

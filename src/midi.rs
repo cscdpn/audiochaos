@@ -235,7 +235,7 @@ pub struct Inputs {
 }
 
 /// Listens to every MIDI input port, so any plugged-in controller plays.
-/// Controllers plugged in later are not picked up.
+/// Controllers plugged in later are only picked up by connecting again.
 pub fn connect(state: &Arc<State>) -> Result<Inputs, Box<dyn Error>> {
     let mut connections = Vec::new();
     let mut names = Vec::new();

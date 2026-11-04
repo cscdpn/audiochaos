@@ -5,14 +5,65 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{BufferSize, Device, SampleFormat, Stream, StreamConfig};
+use cpal::{BufferSize, Device, Host, SampleFormat, Stream, StreamConfig};
 
 use super::control::Engine;
 use super::input::{self, Callbacks, LiveInput};
 use super::record::Tap;
 
-/// The default output device and its preferred configuration. The sample rate
-/// must be known before building the graph, hence the two-step setup.
+/// A sound card to pick from, as the UIs list it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeviceEntry {
+    /// What `output` and `input` take to open it.
+    pub id: String,
+    pub name: String,
+}
+
+/// The output devices worth offering, as they are now: cards come and go.
+pub fn outputs() -> Vec<DeviceEntry> {
+    cpal::default_host()
+        .output_devices()
+        .map(listed)
+        .unwrap_or_default()
+}
+
+/// The input devices worth offering, as they are now.
+pub fn inputs() -> Vec<DeviceEntry> {
+    cpal::default_host()
+        .input_devices()
+        .map(listed)
+        .unwrap_or_default()
+}
+
+fn listed(devices: impl Iterator<Item = Device>) -> Vec<DeviceEntry> {
+    devices
+        .filter_map(|device| {
+            let id = device.id().ok()?.to_string();
+            worth_listing(&id).then(|| DeviceEntry {
+                name: name(&device),
+                id,
+            })
+        })
+        .collect()
+}
+
+/// ALSA lists each card a dozen times over: as `hw:` (exclusive), `surround`
+/// layouts, `hdmi:` outputs... Its own default device is the one to use.
+/// Other systems list each card once.
+fn worth_listing(id: &str) -> bool {
+    !id.starts_with("alsa:") || is_card_default(id)
+}
+
+/// The name of a device, for people.
+pub fn name(device: &Device) -> String {
+    device
+        .description()
+        .map_or_else(|_| "unnamed device".to_string(), |d| d.name().to_string())
+}
+
+/// An output device and its preferred configuration: the one with this `id`,
+/// or else the system's default. The sample rate must be known before
+/// building the graph, hence the two-step setup.
 ///
 /// ALSA's default is card 0, and a USB MIDI controller plugged in at boot can
 /// take that index although it has no audio output. So when the default does
@@ -20,18 +71,38 @@ use super::record::Tap;
 ///
 /// `buffer` asks for callbacks of that many frames, if the device takes
 /// them; the system's default otherwise.
-pub fn default_output(buffer: Option<u32>) -> Result<(Device, StreamConfig), Box<dyn Error>> {
+pub fn output(
+    id: Option<&str>,
+    buffer: Option<u32>,
+) -> Result<(Device, StreamConfig), Box<dyn Error>> {
     let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .ok_or("no audio output device")?;
-    let (device, config) = with_fallback(device, host.output_devices()?, output_config)?;
+    let (device, config) = match id {
+        Some(id) => {
+            let device = by_id(&host, id)?;
+            let config = output_config(&device)?;
+            (device, config)
+        }
+        None => {
+            let device = host
+                .default_output_device()
+                .ok_or("no audio output device")?;
+            with_fallback(device, host.output_devices()?, output_config)?
+        }
+    };
     let config = with_buffer(config, buffer, |c: StreamConfig| {
         device
             .build_output_stream(c, |_: &mut [f32], _| {}, |_| {}, None)
             .is_ok()
     });
     Ok((device, config))
+}
+
+/// Looked up in the list rather than with cpal's `device_by_id`, which
+/// misses ALSA's card defaults: it looks for `default:CARD=X,DEV=0`.
+fn by_id(host: &Host, id: &str) -> Result<Device, Box<dyn Error>> {
+    host.devices()?
+        .find(|d| d.id().is_ok_and(|d| d.to_string() == id))
+        .ok_or_else(|| format!("no sound card {id}: unplugged?").into())
 }
 
 fn output_config(device: &Device) -> Result<StreamConfig, Box<dyn Error>> {
@@ -44,19 +115,29 @@ fn output_config(device: &Device) -> Result<StreamConfig, Box<dyn Error>> {
     Ok(supported.config())
 }
 
-/// The default input device, at the output's sample rate: the engine has a
-/// single rate, and resampling the input is not worth its latency and code.
-/// Falls back on the first sound card that opens, like the output, and asks
-/// for the same `buffer`.
-pub fn default_input(
+/// An input device, the one with this `id` or else the system's default, at
+/// the output's sample rate: the engine has a single rate, and resampling the
+/// input is not worth its latency and code. The default falls back on the
+/// first sound card that opens, like the output, and asks for the same
+/// `buffer`.
+pub fn input(
+    id: Option<&str>,
     sample_rate: u32,
     buffer: Option<u32>,
 ) -> Result<(Device, StreamConfig), Box<dyn Error>> {
     let host = cpal::default_host();
-    let device = host.default_input_device().ok_or("no audio input device")?;
-    let (device, config) = with_fallback(device, host.input_devices()?, |d| {
-        input_config(d, sample_rate)
-    })?;
+    let config = |d: &Device| input_config(d, sample_rate);
+    let (device, config) = match id {
+        Some(id) => {
+            let device = by_id(&host, id)?;
+            let config = config(&device)?;
+            (device, config)
+        }
+        None => {
+            let device = host.default_input_device().ok_or("no audio input device")?;
+            with_fallback(device, host.input_devices()?, config)?
+        }
+    };
     let config = with_buffer(config, buffer, |c: StreamConfig| {
         device
             .build_input_stream(c, |_: &[f32], _| {}, |_| {}, None)
@@ -236,6 +317,15 @@ mod tests {
         assert_eq!(size(None), BufferSize::Default);
         assert_eq!(size(Some(1024)), BufferSize::Fixed(1024));
         assert_eq!(size(Some(128)), BufferSize::Default);
+    }
+
+    #[test]
+    fn alsa_lists_each_card_once_other_systems_everything() {
+        assert!(worth_listing("alsa:default:CARD=U192k"));
+        assert!(!worth_listing("alsa:hw:CARD=1,DEV=0"));
+        assert!(!worth_listing("alsa:null"));
+        assert!(worth_listing("wasapi:{0.0.0.00000000}.{1234}"));
+        assert!(worth_listing("coreaudio:BuiltInSpeakerDevice"));
     }
 
     #[test]

@@ -150,6 +150,16 @@ impl Editor {
         Ok(problems)
     }
 
+    /// Edits another engine, playing the same patch: blocks stay in place.
+    pub fn replace_engine(&mut self, controller: Controller, context: Context) {
+        let positions = self.patch().positions;
+        self.controller = controller;
+        self.context = context;
+        // Tempos tapped on the old clocks are gone with them.
+        self.taps.clear();
+        self.rebuild(&positions);
+    }
+
     /// The playing patch, block positions included.
     pub fn patch(&self) -> Patch {
         let mut patch = Patch::from_controller(&self.controller);
@@ -929,6 +939,25 @@ mod tests {
         let osc = block_of(&editor, "osc 1");
         let pos = editor.snarl.get_node_info(osc).unwrap().pos;
         assert_eq!([pos.x, pos.y], [123.0, 456.0]);
+    }
+
+    #[test]
+    fn another_engine_plays_the_same_blocks_in_the_same_places() {
+        let mut editor = editor("chaos");
+        let osc = block_of(&editor, "osc 1");
+        editor.snarl.get_node_info_mut(osc).unwrap().pos = egui::pos2(123.0, 456.0);
+        editor
+            .controller
+            .set_param(module(&editor, "osc 1"), oscillator::FREQ, 220.0)
+            .unwrap();
+        let before = editor.patch();
+        // As built on another sound card, at another rate.
+        let context = Context::new(44_100.0);
+        let (graph, out) = before.build(&context).unwrap();
+        let (_, controller) = Engine::new(graph, out, 1024);
+        editor.replace_engine(controller, context);
+        assert_eq!(editor.patch(), before);
+        assert_eq!(wires(&editor), expected_wires(&editor));
     }
 
     #[test]

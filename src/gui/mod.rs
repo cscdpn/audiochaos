@@ -12,12 +12,12 @@ use std::time::Duration;
 
 use eframe::egui;
 
-use crate::engine::audio::Playback;
-use crate::engine::control::Controller;
+use crate::engine::audio::{self, DeviceEntry, Playback};
 use crate::engine::record::{self, Recorder};
-use crate::modules::Context;
+use crate::midi;
 use crate::patch::Patch;
 use crate::presets;
+use crate::session::{self, Devices, Session};
 use editor::Editor;
 use keyboard::Keyboard;
 
@@ -28,25 +28,29 @@ const REFRESH: Duration = Duration::from_millis(250);
 /// follow a beat.
 const LIVE_REFRESH: Duration = Duration::from_millis(33);
 
-/// Runs until the window is closed. `patch` is the one already playing; only
-/// its block positions are read. `status` is the first message shown.
-/// Recordings go to the current directory.
+/// Runs until the window is closed. `session` plays `patch` on `devices`;
+/// only the patch's block positions are read. `status` is the first message
+/// shown. Recordings go to the current directory.
 pub fn run(
-    controller: Controller,
-    context: Context,
+    session: Session,
+    devices: Devices,
+    midi: Option<midi::Inputs>,
     patch: &Patch,
-    playback: Playback,
-    recorder: Recorder,
     status: String,
 ) -> Result<(), Box<dyn Error>> {
-    let keyboard = Keyboard::new(Arc::clone(&context.midi));
-    let mut editor = Editor::new(controller, context, &patch.positions);
+    let midi_state = Arc::clone(&session.context.midi);
+    let keyboard = Keyboard::new(Arc::clone(&midi_state));
+    let mut editor = Editor::new(session.controller, session.context, &patch.positions);
     editor.status = status;
     let app = GuiApp {
         editor,
         keyboard,
-        playback,
-        recorder,
+        playback: session.playback,
+        recorder: session.recorder,
+        devices,
+        device_lists: None,
+        midi_state,
+        midi_inputs: midi,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -64,6 +68,14 @@ struct GuiApp {
     /// Owned so the sound plays exactly as long as the window is open.
     playback: Playback,
     recorder: Recorder,
+    /// The sound cards playing.
+    devices: Devices,
+    /// The outputs and inputs, listed when the Audio menu opens.
+    device_lists: Option<(Vec<DeviceEntry>, Vec<DeviceEntry>)>,
+    /// What the MIDI controllers play, shared by every session.
+    midi_state: Arc<midi::State>,
+    /// Owned so the controllers play as long as the window is open.
+    midi_inputs: Option<midi::Inputs>,
 }
 
 impl eframe::App for GuiApp {
@@ -83,6 +95,12 @@ impl eframe::App for GuiApp {
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
                 ui.menu_button("Patch", |ui| self.patch_menu(ui));
+                let audio = ui.menu_button("Audio", |ui| self.audio_menu(ui));
+                if audio.inner.is_none() {
+                    // Closed: list the cards again next time, in case one
+                    // was plugged in or out.
+                    self.device_lists = None;
+                }
                 ui.separator();
                 self.run_button(ui);
                 self.record_button(ui);
@@ -145,6 +163,62 @@ impl GuiApp {
             && let Some((patch, _)) = self.read_patch()
         {
             self.editor.paste(&patch);
+        }
+    }
+
+    fn audio_menu(&mut self, ui: &mut egui::Ui) {
+        let (outputs, inputs) = self
+            .device_lists
+            .get_or_insert_with(|| (audio::outputs(), audio::inputs()))
+            .clone();
+        ui.weak("Output");
+        if let Some(output) = device_choice(ui, &self.devices.output, &outputs) {
+            self.switch(Devices {
+                output,
+                ..self.devices.clone()
+            });
+        }
+        ui.separator();
+        ui.weak("Input");
+        if let Some(input) = device_choice(ui, &self.devices.input, &inputs) {
+            self.switch(Devices {
+                input,
+                ..self.devices.clone()
+            });
+        }
+        ui.separator();
+        if ui
+            .button("Reconnect MIDI controllers")
+            .on_hover_text("Picks up controllers plugged in since")
+            .clicked()
+        {
+            // Closed first: some systems open a port only once.
+            self.midi_inputs = None;
+            let (inputs, status) = session::connect_midi(&self.midi_state);
+            self.midi_inputs = inputs;
+            self.editor.status = status;
+        }
+    }
+
+    /// Plays the patch on other sound cards. The modules start afresh, as
+    /// the new cards may run at another rate: sequencers start over and
+    /// loopers forget their recordings. The running recording is saved.
+    /// Nothing changes if the cards do not open.
+    fn switch(&mut self, devices: Devices) {
+        let patch = self.editor.patch();
+        match session::start(&patch, &devices, &self.midi_state) {
+            Ok(session) => {
+                // The old streams stop as they are dropped here.
+                self.playback = session.playback;
+                self.recorder = session.recorder;
+                self.editor
+                    .replace_engine(session.controller, session.context);
+                self.devices = devices;
+                let mut status = vec![format!("playing on {}", session.output)];
+                status.extend(session.problems);
+                self.editor.status = status.join("; ");
+            }
+            Err(e) => self.editor.status = format!("cannot switch sound cards: {e}"),
         }
     }
 
@@ -219,6 +293,29 @@ impl GuiApp {
             Err(e) => format!("cannot save {label}: {e}"),
         };
     }
+}
+
+/// Radio buttons for the system's default and each of `devices`, `current`
+/// selected. Returns the one clicked, if another.
+fn device_choice(
+    ui: &mut egui::Ui,
+    current: &Option<String>,
+    devices: &[DeviceEntry],
+) -> Option<Option<String>> {
+    let mut choice = None;
+    if ui.radio(current.is_none(), "System default").clicked() && current.is_some() {
+        choice = Some(None);
+    }
+    for device in devices {
+        let selected = current.as_deref() == Some(device.id.as_str());
+        if ui.radio(selected, &device.name).clicked() && !selected {
+            choice = Some(Some(device.id.clone()));
+        }
+    }
+    if devices.is_empty() {
+        ui.weak("no sound card found");
+    }
+    choice
 }
 
 fn patch_dialog() -> rfd::FileDialog {

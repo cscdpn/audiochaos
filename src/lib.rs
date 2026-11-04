@@ -4,4 +4,5 @@ pub mod midi;
 pub mod modules;
 pub mod patch;
 pub mod presets;
+pub mod session;
 pub mod tui;
