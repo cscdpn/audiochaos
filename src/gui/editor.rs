@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::error::Error;
+use std::time::Duration;
 
-use eframe::egui::emath::TSTransform;
-use eframe::egui::{self, Color32, Pos2, Rect, Ui, Vec2};
+use egui::emath::TSTransform;
+use egui::{Color32, Pos2, Rect, Ui, Vec2};
 use egui_snarl::ui::{PinInfo, PinPlacement, SnarlPin, SnarlStyle, SnarlViewer, SnarlWidget};
 use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
@@ -21,6 +22,11 @@ const SLIDER_WIDTH: f32 = 150.0;
 const LED_OFF: Color32 = Color32::from_rgb(0x40, 0x10, 0x10);
 const LED_ON: Color32 = Color32::from_rgb(0xff, 0x30, 0x20);
 const LED_RADIUS: f32 = 5.0;
+/// How often to redraw without input, to keep the status current.
+const REFRESH: Duration = Duration::from_millis(250);
+/// How often to redraw while lights blink or ticks move: fast enough to
+/// follow a beat.
+const LIVE_REFRESH: Duration = Duration::from_millis(33);
 /// Closer than this to the knob, in knob travel, the modulation mark would
 /// only hide the handle.
 const MARKER_MIN_GAP: f32 = 0.01;
@@ -55,7 +61,8 @@ pub struct Editor {
     view: Rect,
     /// Blocks to copy, asked for from a block's menu while drawing.
     to_duplicate: Option<Vec<BlockId>>,
-    pub(super) status: String,
+    /// The last thing worth telling the user, for the status bar.
+    pub status: String,
 }
 
 impl Editor {
@@ -169,6 +176,11 @@ impl Editor {
             .map(|(pos, &id)| (self.controller.node(id).name.clone(), [pos.x, pos.y]))
             .collect();
         patch
+    }
+
+    /// How soon to redraw, input or not.
+    pub fn refresh(&self) -> Duration {
+        if self.moves() { LIVE_REFRESH } else { REFRESH }
     }
 
     /// Whether some block shows a light or a modulation tick, which need

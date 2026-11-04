@@ -1,8 +1,11 @@
 pub mod engine;
+#[cfg(feature = "editor")]
 pub mod gui;
 pub mod midi;
 pub mod modules;
 pub mod patch;
 pub mod presets;
+#[cfg(feature = "app")]
 pub mod session;
+#[cfg(feature = "app")]
 pub mod tui;

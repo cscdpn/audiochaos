@@ -4,23 +4,44 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[workspace]
+members = []
+
+[features]
+default = ["app"]
+# The node editor, without a window of its own: the DAW plugin draws it in
+# the host's window.
+editor = ["dep:egui", "dep:egui-snarl", "dep:rfd"]
+# The standalone program: sound card, MIDI ports, its own window, the
+# terminal UI.
+app = ["editor", "dep:cpal", "dep:eframe", "dep:midir", "dep:ratatui"]
+
+[[bin]]
+name = "audiochaos"
+path = "src/main.rs"
+required-features = ["app"]
+
 [dependencies]
-cpal = "0.18.2"
-# Pinned to 0.36: egui-snarl 0.12 is built on egui 0.36. The glow (OpenGL)
-# backend instead of the default wgpu: plenty for 2D blocks and sliders, and
-# far fewer dependencies to compile.
+cpal = { version = "0.18.2", optional = true }
+# Pinned to 0.36: egui-snarl 0.12 is built on egui 0.36, and so is
+# nice-plug-egui 0.5, which draws the editor in the plugin. The glow
+# (OpenGL) backend instead of the default wgpu: plenty for 2D blocks and
+# sliders, and far fewer dependencies to compile.
 eframe = { version = "0.36.2", default-features = false, features = [
     "accesskit",
     "default_fonts",
     "glow",
     "wayland",
     "x11",
-] }
-egui-snarl = "0.12.0"
+], optional = true }
+egui = { version = "0.36.2", default-features = false, features = [
+    "default_fonts",
+], optional = true }
+egui-snarl = { version = "0.12.0", optional = true }
 hound = "3.5.1"
-midir = "0.11.1"
-ratatui = "0.30.2"
-rfd = "0.17.2"
+midir = { version = "0.11.1", optional = true }
+ratatui = { version = "0.30.2", optional = true }
+rfd = { version = "0.17.2", optional = true }
 rtrb = "0.4.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

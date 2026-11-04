@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use eframe::egui::{Event, Key};
+use egui::{Event, Key};
 
 use crate::midi::{Parser, State};
 
@@ -92,7 +92,7 @@ impl Keyboard {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use eframe::egui::Modifiers;
+    use egui::Modifiers;
 
     fn key(physical_key: Key, pressed: bool) -> Event {
         Event::Key {

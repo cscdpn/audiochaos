@@ -441,6 +441,7 @@ version = "0.1.0"
 dependencies = [
  "cpal",
  "eframe",
+ "egui",
  "egui-snarl",
  "hound",
  "midir",
