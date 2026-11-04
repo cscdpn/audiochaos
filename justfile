@@ -13,11 +13,22 @@ tui *args:
     cargo run -- --tui {{args}}
 
 test:
-    cargo test
+    cargo test --workspace
+
+# Builds the VST3 and CLAP plugins into target/bundled/.
+bundle:
+    cargo xtask bundle audiochaos-plugin --release
+
+# Bundles the plugins and copies them where Linux hosts look for them.
+install-plugin: bundle
+    mkdir -p ~/.vst3 ~/.clap
+    rm -rf ~/.vst3/audiochaos.vst3
+    cp -r target/bundled/audiochaos.vst3 ~/.vst3/
+    cp target/bundled/audiochaos.clap ~/.clap/
 
 fmt:
-    cargo fmt
+    cargo fmt --all
 
 lint:
-    cargo fmt --check
-    cargo clippy --all-targets -- -D warnings
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets -- -D warnings

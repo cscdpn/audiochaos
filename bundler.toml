@@ -1,0 +1,3 @@
+# Names of the bundles `cargo xtask bundle` writes, by package.
+[audiochaos-plugin]
+name = "audiochaos"

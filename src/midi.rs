@@ -130,6 +130,13 @@ impl State {
     pub fn knob(&self, knob: usize) -> f32 {
         f32::from(self.knobs[knob].load(Ordering::Relaxed)) / 127.0
     }
+
+    /// Turns a knob as its controller would, to 0..1 in MIDI's 128 steps:
+    /// for a DAW's automation, which plays the knobs instead.
+    pub fn set_knob(&self, knob: usize, value: f32) {
+        let value = (value.clamp(0.0, 1.0) * 127.0).round() as u8;
+        self.knobs[knob].store(value, Ordering::Relaxed);
+    }
 }
 
 /// Decodes one controller's messages into the shared state.
@@ -232,6 +239,15 @@ fn pad(note: u8) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn knobs_turn_without_a_controller_too() {
+        let state = State::default();
+        state.set_knob(2, 0.5);
+        assert!((state.knob(2) - 64.0 / 127.0).abs() < 1e-6);
+        state.set_knob(2, 7.0);
+        assert_eq!(state.knob(2), 1.0);
+    }
 
     const ON: u8 = 0x90;
     const OFF: u8 = 0x80;

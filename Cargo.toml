@@ -5,7 +5,7 @@ edition = "2024"
 license = "MIT"
 
 [workspace]
-members = []
+members = ["plugin", "xtask"]
 
 [features]
 default = ["app"]

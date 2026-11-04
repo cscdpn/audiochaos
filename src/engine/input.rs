@@ -45,6 +45,14 @@ impl LiveInput {
         }
     }
 
+    /// Sets one frame of every channel, for a host handing frames over one
+    /// at a time.
+    pub fn write_frame(&self, frame: usize, values: [f32; CHANNELS]) {
+        for (channel, value) in values.into_iter().enumerate() {
+            self.write(channel, frame, value);
+        }
+    }
+
     fn write(&self, channel: usize, frame: usize, value: f32) {
         self.channels[channel][frame].store(value.to_bits(), Ordering::Relaxed);
     }

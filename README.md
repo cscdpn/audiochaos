@@ -2,7 +2,8 @@
 
 A modular synthesizer written in Rust, built for chaotic, aggressive sounds:
 small signal-processing bricks that you route together however you like,
-in a graphical node editor or a terminal UI.
+in a graphical node editor or a terminal UI, on its own or as a VST3 or CLAP
+instrument in a DAW.
 
 ## Using it
 
@@ -64,6 +65,31 @@ the knobs.
   cables and sounds stay, but sequencers start over and loopers forget their
   recording; a running recording is saved. If the card does not open, the
   synth plays on where it was.
+
+### DAW plugin
+
+The same synth runs as a VST3 and CLAP instrument in a DAW: Ardour, Reaper,
+Bitwig and others. It is tested on Linux; on Windows it compiles but has not
+been tried in a host yet. `just install-plugin` builds both and
+copies them to `~/.vst3` and `~/.clap`, where Linux hosts look; on Windows,
+copy `target/bundled/audiochaos.vst3` to `C:\Program Files\Common Files\VST3`.
+Ardour only loads VST3; Reaper and Bitwig take either.
+
+- The plugin's window is the node editor, with the **Patch** menu and
+  **Stop**: presets, import and export, groups of blocks all work.
+- The patch is saved with the DAW's project, block positions included, and
+  comes back when it is opened. A new instance starts on `keys`.
+- The track's MIDI plays the `midi` and `poly` modules, as a controller
+  would: notes, pitch bend and controllers 1 to 8 for the knobs.
+- **Knob 1** to **Knob 8** are the `midi` modules' knobs as parameters the DAW
+  can automate. Moving one in the DAW takes over that knob; a controller
+  turning it after that takes it back.
+- The track's audio reaches `input` modules, one 64-sample block late.
+- At another sample rate, the patch is built again: knobs, cables and sounds
+  stay, sequencers start over and loopers forget their recording.
+
+The sound card, MIDI ports, recording and computer keyboard are the DAW's
+business, so the plugin has none of them.
 
 ### Terminal UI
 
@@ -404,6 +430,25 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
   queue to be freed on the UI thread. Modules sit in a fixed number of
   preallocated slots (64), so neither side ever reallocates. Loading a patch
   swaps in a whole new graph in one go.
+- The plugin, in `plugin/`, is built on
+  [nice-plug](https://codeberg.org/RustAudio/nice-plug), the community
+  continuation of NIH-plug, whose VST3 support uses MIT-licensed bindings,
+  so the bundles stay MIT. It draws the editor with nice-plug-egui 0.5, the
+  last release on egui 0.36, the editor's version. The library's `app`
+  feature, on by default, holds what only the standalone program needs (sound
+  card, MIDI ports, eframe, terminal UI); the plugin builds the library
+  with `editor` only.
+- In the plugin, the host's audio thread owns the engine as the sound card's
+  callback does in the program, and the editor, which holds the controller,
+  sits behind a mutex that only the host's other threads take: the window to
+  draw, the host to save and restore the patch. Saving reads the patch from
+  the editor, so the project always holds what is on screen.
+- Hosts hand over input and want output in the same call, frame by frame.
+  Each input frame goes into the block the engine computes next, so the
+  input comes out exactly one block late, whatever the host's buffer size,
+  without the standalone program's queue.
+- An integration test drives the plugin through its CLAP entry point as a
+  host would: notes in, sound out, state saved and restored.
 - The engine is a library that renders offline, so it is fully testable
   without any audio hardware. A fuzz test renders random patches with random
   knob settings and checks the output stays finite and bounded.
@@ -423,13 +468,19 @@ just run --render out.wav --seconds 60   # render to WAV, no sound card
 just run --buffer 128 looper             # smaller sound card buffers
 just run --midi-monitor                  # what the MIDI controllers send
 just tui          # terminal UI instead of the editor
+just bundle         # VST3 and CLAP plugins into target/bundled/
+just install-plugin # the same, copied to ~/.vst3 and ~/.clap
 just test
-just lint   # cargo fmt --check + clippy
+just lint   # cargo fmt --check + clippy, whole workspace
 just fmt
 ```
 
 [`just`](https://github.com/casey/just) is optional; the recipes are thin
 wrappers around the usual `cargo` commands in the `justfile`.
+
+The plugin's bundles come from `cargo xtask bundle`, nice-plug's bundler,
+since a plugin is a folder layout around the library that cargo alone does
+not produce.
 
 Dev builds use `opt-level = 1`: unoptimized DSP made the stability tests
 slow and risked audio dropouts.

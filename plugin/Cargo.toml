@@ -1,0 +1,26 @@
+[package]
+name = "audiochaos-plugin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+# cdylib for the VST3 and CLAP bundles, lib for the tests.
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+audiochaos = { path = "..", default-features = false, features = ["editor"] }
+# Must match the editor's egui, 0.36: see the main Cargo.toml.
+egui = { version = "0.36.2", default-features = false }
+# The community continuation of NIH-plug. Its VST3 support uses MIT-licensed
+# bindings, so the bundles stay under MIT.
+nice-plug = "0.4.2"
+# 0.5 is the last release on egui 0.36.
+nice-plug-egui = "0.5.1"
+
+[dev-dependencies]
+# The CLAP C API, to drive the plugin as a host would in the tests. The
+# version nice-plug builds on.
+clap-sys = "0.5.0"
+serde_json = "1.0.154"

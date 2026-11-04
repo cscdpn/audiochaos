@@ -9,7 +9,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 use super::graph::{
     Cable, CableSet, Graph, GraphError, MAX_MODULES, MAX_PARAMS, Node, NodeId, free_slot,
 };
-use super::input::Feed;
+use super::input::{CHANNELS, Feed, LiveInput};
 use super::module::{BLOCK, Module, ModuleInfo};
 use super::sample::Sample;
 
@@ -435,6 +435,17 @@ impl Engine {
         sample
     }
 
+    /// Like `next_sample`, for a host that hands over each input frame along
+    /// with the output frame it wants, as a DAW does: the frame goes into
+    /// `live` for the next block, so the input comes out one block late, 64
+    /// samples, however large the host's buffers. Written after computing,
+    /// since computing a block reads the one before.
+    pub fn next_sample_after(&mut self, input: [f32; CHANNELS], live: &LiveInput) -> f32 {
+        let sample = self.next_sample();
+        live.write_frame(self.position - 1, input);
+        sample
+    }
+
     /// Every slot, so a freed one goes dark.
     fn publish_readings(&self) {
         for slot in 0..MAX_MODULES {
@@ -617,6 +628,25 @@ mod tests {
         let resumed = engine.graph.output(lfo, lfo::OUT_SAW)[0];
         assert!((resumed - held).abs() < 0.01, "{held} then {resumed}");
         assert!(engine.next_sample().abs() > 0.0);
+    }
+
+    #[test]
+    fn a_host_input_comes_out_one_block_later() {
+        use crate::modules::input::Input;
+
+        let live = Arc::new(LiveInput::default());
+        let mut graph = Graph::new(SR);
+        let mic = graph.add("input", Box::new(Input::new(Arc::clone(&live))));
+        let out = graph.add("master", Box::new(Master));
+        let (mut engine, _controller) = Engine::new(graph, out, 8);
+        for frame in 0..3 * BLOCK {
+            engine.next_sample_after([frame as f32, -(frame as f32)], &live);
+            let block = engine.graph.output(mic, 0);
+            let heard = block[engine.position - 1];
+            let expected = frame.saturating_sub(BLOCK) as f32;
+            assert_eq!(heard, if frame < BLOCK { 0.0 } else { expected }, "{frame}");
+        }
+        assert_eq!(engine.graph.output(mic, 1)[0], -(BLOCK as f32));
     }
 
     #[test]
