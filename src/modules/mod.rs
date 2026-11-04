@@ -12,7 +12,9 @@ mod dsp;
 pub mod filter;
 pub mod flanger;
 pub mod input;
+pub mod invert;
 pub mod lfo;
+pub mod logic;
 pub mod looper;
 pub mod master;
 pub mod midi;
@@ -55,7 +57,7 @@ impl Context {
 }
 
 /// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 24] = [
+pub const KINDS: [&ModuleInfo; 26] = [
     &input::INFO,
     &midi::INFO,
     &poly::INFO,
@@ -68,6 +70,8 @@ pub const KINDS: [&ModuleInfo; 24] = [
     &sampler::INFO,
     &looper::INFO,
     &atten::INFO,
+    &invert::INFO,
+    &logic::INFO,
     &oscillator::INFO,
     &filter::INFO,
     &distortion::INFO,
@@ -99,6 +103,8 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
         "sampler" => Box::new(sampler::Sampler::new(sr)),
         "looper" => Box::new(looper::Looper::new(sr)),
         "atten" => Box::new(atten::Atten),
+        "invert" => Box::new(invert::Invert),
+        "logic" => Box::new(logic::Logic::default()),
         "osc" => Box::new(oscillator::Oscillator::new(sr)),
         "filter" => Box::new(filter::Filter::new(sr)),
         "dist" => Box::new(distortion::Distortion),

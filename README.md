@@ -266,6 +266,8 @@ Module types, as patches and the editor's palette name them:
 | looper | records its input while `record` is held, then plays it like `sampler` |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
 | atten | three attenuverters: each output is its input times -1..1 |
+| invert | `-in` mirrors a ±1 signal, `1-in` flips a 0..1 one: a gate's NOT |
+| logic | `and`, `or`, `xor` of two signals and `not` of the first, high above 0 |
 | osc | sine, saw, square, with through-zero linear FM |
 | filter | resonant state-variable filter: lowpass, bandpass, highpass |
 | dist | drive into a blend of `tanh` clipping and sine wavefolding |
@@ -292,6 +294,15 @@ are already a patch away:
 - Tremolo: `lfo` into a VCA's `mod`.
 - Ring modulation: `osc` into a VCA's `mod`.
 - Auto-wah: `lfo` into the `cutoff cv` of a `filter`, on its `bandpass`.
+
+`invert` and `logic` reshape control signals. `1-in` turns a MIDI knob or an
+envelope the other way round, so one knob opens a filter while closing
+another; on a gate it is a NOT. `logic` counts anything above 0 as high, so
+it takes gates, clock outputs, a sequencer's `cv` or an LFO alike: the
+`and` of a clock's `8th` and a sequencer's `gate` keeps only the eighths
+where a step plays, the `not` of the clock's `beat` rises on each offbeat,
+the `xor` of two clock outputs syncopates, and the `not` of a pad's gate in
+a `seq`'s `run cv` plays it until the pad is held.
 
 ### Tempo
 
