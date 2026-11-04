@@ -428,7 +428,10 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
   default wgpu, for far fewer dependencies, and is pinned to 0.36 because the
   node-graph widget, `egui-snarl` 0.12, is built on egui 0.36.
 - Nothing on the audio thread allocates: delay lines and the looper's 30 s
-  are allocated up front, and cables live in a fixed-capacity set.
+  are allocated up front, and cables live in a fixed-capacity set. A test
+  counts allocations while every preset plays with notes, knobs and live
+  edits, and expects none; the plugin's tests build nice-plug with
+  `assert_process_allocs`, which aborts if `process` allocates.
 - A sound file is read on the UI thread and moved to the audio thread whole;
   the one it replaces comes back the same way as a removed module. The file's
   rate is handled by the playback rate, with linear interpolation, which aliases
