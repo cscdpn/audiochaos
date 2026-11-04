@@ -44,7 +44,11 @@ mod tests {
 
     /// 100 ms windows.
     fn windows(audio: &[f32]) -> impl Iterator<Item = &[f32]> {
-        audio.chunks_exact(SR as usize / 10)
+        audio
+            .as_chunks::<{ SR as usize / 10 }>()
+            .0
+            .iter()
+            .map(|w| w.as_slice())
     }
 
     fn spread(values: &[f32]) -> f32 {

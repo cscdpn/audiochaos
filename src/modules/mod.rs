@@ -302,8 +302,8 @@ pub(crate) mod test_util {
         let mut inputs = vec![[0.0; BLOCK]; module.info().inputs.len()];
         let mut outputs = vec![[0.0; BLOCK]; module.info().outputs.len()];
         let mut out = Vec::with_capacity(signal.len());
-        for chunk in signal.chunks_exact(BLOCK) {
-            inputs[0] = chunk.try_into().unwrap();
+        for chunk in signal.as_chunks::<BLOCK>().0 {
+            inputs[0] = *chunk;
             module.process(&inputs, &params, &mut outputs);
             out.extend_from_slice(&outputs[port]);
         }
@@ -328,7 +328,7 @@ pub(crate) mod test_util {
     /// whole periods and only the module makes the level change.
     pub fn wobbles(module: &mut dyn Module, freq: f32, params: &[f32], port: usize) -> usize {
         let out = process_signal(module, &sine(freq, 48_000.0, 480_000), params, port);
-        let levels: Vec<f32> = out.chunks_exact(480).map(rms).collect();
+        let levels: Vec<f32> = out.as_chunks::<480>().0.iter().map(|w| rms(w)).collect();
         let average = levels.iter().sum::<f32>() / levels.len() as f32;
         // Not counting rounding noise around a level that does not move.
         let quiet = 0.01 * average;

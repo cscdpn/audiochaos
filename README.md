@@ -408,7 +408,8 @@ the next are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Build, run, test
 
-Requires a recent stable Rust toolchain and, on Linux, the ALSA and D-Bus
+Requires [rustup](https://rustup.rs), which fetches the Rust version set in
+`rust-toolchain.toml`, and, on Linux, the ALSA and D-Bus
 development headers (`alsa-lib` and `dbus` on Arch, `libasound2-dev` and
 `libdbus-1-dev` on Debian/Ubuntu); D-Bus asks RealtimeKit for the audio
 thread's priority. It also runs on Windows, MIDI controllers included, with

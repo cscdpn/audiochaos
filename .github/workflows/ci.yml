@@ -19,9 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # The version in rust-toolchain.toml, with clippy and rustfmt.
+      - run: rustup toolchain install
       - name: System libraries
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev libwayland-dev
       - uses: Swatinem/rust-cache@v2
@@ -38,7 +37,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup toolchain install
       - name: System libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev libwayland-dev
@@ -54,6 +53,6 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - run: rustup toolchain install
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --features asio --locked

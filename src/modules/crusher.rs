@@ -102,7 +102,7 @@ mod tests {
     fn downsampling_holds_each_value() {
         let input = sine(100.0, SR, 4800);
         let out = process_signal(&mut Crusher::new(), &input, &[16.0, 8.0], OUT);
-        for chunk in out.chunks_exact(8) {
+        for chunk in out.as_chunks::<8>().0 {
             assert!(chunk.iter().all(|&s| s == chunk[0]));
         }
     }

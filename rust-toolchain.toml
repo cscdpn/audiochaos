@@ -1,0 +1,5 @@
+# The toolchain for this repository, here and in CI, so that a new Rust
+# release (and the lints of its clippy) arrives when we choose to update.
+[toolchain]
+channel = "1.99.1"
+components = ["clippy", "rustfmt"]

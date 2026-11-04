@@ -2,8 +2,9 @@
 
 ## Setup
 
-A stable Rust toolchain, plus on Linux the ALSA and D-Bus development
-headers (see the [README](README.md#build-run-test)). [`just`](https://github.com/casey/just)
+[rustup](https://rustup.rs), which installs the Rust version pinned in
+`rust-toolchain.toml` on the first cargo command, plus on Linux the ALSA and
+D-Bus development headers (see the [README](README.md#build-run-test)). [`just`](https://github.com/casey/just)
 is optional: each recipe in the `justfile` is one or two cargo commands.
 
 ```sh
@@ -79,6 +80,10 @@ GitHub Actions, free for a public repository:
 
 A dependency under a license not yet in `about.toml` fails the release
 until it is reviewed and added there.
+
+CI builds with the Rust version in `rust-toolchain.toml`, like a local
+build, so a new clippy cannot break a commit that passed. Updating Rust is
+a commit of its own: bump the version there, fix what the new lints find.
 
 ## Releasing
 
