@@ -1,3 +1,5 @@
+//! Modules and the cables between them, computed one block at a time.
+
 use std::error::Error;
 use std::fmt;
 

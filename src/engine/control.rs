@@ -1,3 +1,7 @@
+//! How the UI edits a graph that lives on the audio thread: an [`Engine`]
+//! that the audio thread owns and asks for samples, and a [`Controller`] that
+//! the UI owns, joined by lock-free queues and atomics.
+
 use std::error::Error;
 use std::fmt;
 use std::mem;
@@ -33,13 +37,10 @@ enum Command {
 
 /// What the audio thread hands back to be freed on the UI thread: freeing
 /// memory is as unpredictable as allocating it.
+#[expect(dead_code, reason = "only ever dropped, never read")]
 enum Retired {
-    // Never read: these are only ever dropped.
-    #[allow(dead_code)]
     Node(Box<Node>),
-    #[allow(dead_code)]
     Graph(Box<Graph>),
-    #[allow(dead_code)]
     Sample(Box<Sample>),
 }
 

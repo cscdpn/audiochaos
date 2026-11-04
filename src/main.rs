@@ -1,3 +1,6 @@
+//! The standalone program: parses the command line, then starts the
+//! graphical editor, the terminal UI, an offline render or the MIDI monitor.
+
 use std::error::Error;
 use std::path::PathBuf;
 use std::process::ExitCode;

@@ -1,3 +1,6 @@
+//! The terminal UI's state and key handling, apart from drawing so it can be
+//! tested without a terminal.
+
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::engine::control::Controller;

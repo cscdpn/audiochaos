@@ -1,3 +1,6 @@
+//! The [`Module`] trait that every brick implements, and the static
+//! description ([`ModuleInfo`]) of its ports and knobs.
+
 use super::param::ParamInfo;
 use super::sample::Sample;
 

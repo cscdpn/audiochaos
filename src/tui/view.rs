@@ -1,3 +1,5 @@
+//! Draws the terminal UI's state with ratatui.
+
 use std::time::Duration;
 
 use ratatui::Frame;

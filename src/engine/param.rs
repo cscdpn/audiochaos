@@ -1,3 +1,6 @@
+//! Knobs: their ranges and scales, and the smoothing that keeps them from
+//! clicking.
+
 /// Time constant of the knob smoothing. Short enough to feel instant, long
 /// enough to remove the click of a sudden jump.
 const TIME_CONSTANT_SECONDS: f32 = 0.005;

@@ -397,119 +397,12 @@ knob. Without a pad, click the **Tap** button in rhythm: it sets the knob,
 and is greyed out while `tap` has a cable. A pad straight into a delay's
 `clock` works too: the delay takes the time between the last two hits.
 
-## Design notes
+## How it works
 
-- Audio and control signals share the same `f32` buffers, like voltages in a
-  hardware modular.
-- Modules are processed in the order they were added. A cable from a module
-  processed later (or from itself) reads its previous block, so feedback is allowed and costs
-  exactly one block (64 samples) of delay. Feedback is a main source of chaos
-  here.
-- The graph owns knob smoothing and modulation: each knob's CV is added in
-  normalized knob space (logarithmic for frequencies and times), so modules
-  just receive per-sample parameter values.
-- The modulation effects are modules rather than patches of `delay` and `lfo`:
-  all-pass stages exist nowhere else, and a flanger's feedback lives within
-  milliseconds that a cable's block of delay would already use up.
-- Every module input is clamped to ±10 and NaN reads as 0, like the power
-  rails of a hardware modular. Without it, feedback through VCAs runs off to
-  infinity and a single non-finite sample poisons a filter's state for good.
-- The master soft-clips with `tanh` and mutes non-finite samples, so the
-  speakers never see an exploded patch.
-- The audio thread owns the graph, so it needs no lock. The UI talks to it
-  through a lock-free queue (`rtrb`) drained once per block, and keeps its own
-  mirror of the patch for display. Both front ends are clients of that same
-  `Controller`; in the editor, a wire is drawn only once the controller has
-  accepted the cable.
-- MIDI input follows it too: midir's threads decode messages into atomics
-  that `midi` modules read once per block, so a burst of knob turns never
-  stalls the audio.
-- Lights and the blue ticks go the other way the same way: after each block,
-  the engine stores every module's brightness and every knob's modulated
-  value in an atomic per slot, and the editor reads them
-  when it draws, about 30 times a second while some block has a light. What
-  a light shows comes from inside the module, so it is the real pace, knob,
-  CV and clock together. Drawn 30 times a second, a light faster than about
-  15 Hz no longer blinks evenly.
-- A `clock` input changes how a module behaves only while a cable is in it:
-  the graph tells modules when an input gains or loses its last cable, since
-  an unplugged input reads the same zeros as a silent one.
-- The sound card's input reaches the engine the same way: its stream has a
-  callback of its own, out of step with the output's, so frames go through a
-  lock-free queue, and the engine takes a block from it before computing
-  each block. The queue keeps a backlog of one callback of each stream,
-  measured as they run: less and it runs dry between two input callbacks.
-  When input and output are different devices, their clocks drift apart; the
-  queue then catches up at once, or waits to refill, with a click, rather
-  than letting the latency grow. The input is not resampled: it must run at
-  the output's rate.
-- Low latency on Linux opens ALSA's `hw:` device rather than `plughw:`,
-  which would convert to floats for us: cpal only gives real-time priority
-  to devices that cannot route to a sound server, and `plughw:` is a plugin.
-  So the engine converts its samples to the card's own format, 32-bit
-  integers on most cards. The menus still list each card by its default
-  device; low latency opens the same card's `hw:` device, which ALSA names
-  by index, found through `/proc/asound`.
-- Switching sound cards opens the new ones before closing the old, so a card
-  that does not open leaves the sound playing. A card in low latency takes
-  one program at a time, which may be the synth itself on the cards it is
-  leaving: then the old streams stop, the new ones are tried again, and the
-  old ones play again if that fails too.
-- ASIO is behind a cargo feature because of its build: it needs LLVM, and
-  downloads Steinberg's ASIO SDK, which is under GPLv3 or Steinberg's own
-  licence. The source here stays MIT; a program built with ASIO falls under
-  the SDK's licence too, which matters only when sharing that program.
-- Stopping the engine is an atomic flag rather than a queued command, so it
-  works even when the queue is full. A stopped engine still drains the queue
-  and the input, so edits apply and the input never overflows; it only skips
-  computing the graph once the fade is done.
-- Live recording follows the same rule: the audio thread copies samples into
-  a second lock-free queue, and a writer thread empties it to disk. The queue
-  holds a second of audio; if the disk stalls longer, samples are dropped and
-  counted rather than glitching the sound.
-- The editor uses `eframe` with the glow (OpenGL) backend rather than the
-  default wgpu, for far fewer dependencies, and is pinned to 0.36 because the
-  node-graph widget, `egui-snarl` 0.12, is built on egui 0.36.
-- Nothing on the audio thread allocates: delay lines and the looper's 30 s
-  are allocated up front, and cables live in a fixed-capacity set. A test
-  counts allocations while every preset plays with notes, knobs and live
-  edits, and expects none; the plugin's tests build nice-plug with
-  `assert_process_allocs`, which aborts if `process` allocates.
-- A sound file is read on the UI thread and moved to the audio thread whole;
-  the one it replaces comes back the same way as a removed module. The file's
-  rate is handled by the playback rate, with linear interpolation, which aliases
-  at high speeds: welcome here.
-- Adding a module builds it on the UI thread, buffers included, and moves it
-  to the audio thread whole; a removed module travels back through a second
-  queue to be freed on the UI thread. Modules sit in a fixed number of
-  preallocated slots (64), so neither side ever reallocates. Loading a patch
-  swaps in a whole new graph in one go.
-- The plugin, in `plugin/`, is built on
-  [nice-plug](https://codeberg.org/RustAudio/nice-plug), the community
-  continuation of NIH-plug, whose VST3 support uses MIT-licensed bindings,
-  so the bundles stay MIT. It draws the editor with nice-plug-egui 0.5, the
-  last release on egui 0.36, the editor's version. The library's `app`
-  feature, on by default, holds what only the standalone program needs (sound
-  card, MIDI ports, eframe, terminal UI); the plugin builds the library
-  with `editor` only.
-- In the plugin, the host's audio thread owns the engine as the sound card's
-  callback does in the program, and the editor, which holds the controller,
-  sits behind a mutex that only the host's other threads take: the window to
-  draw, the host to save and restore the patch. Saving reads the patch from
-  the editor, so the project always holds what is on screen.
-- Hosts hand over input and want output in the same call, frame by frame.
-  Each input frame goes into the block the engine computes next, so the
-  input comes out exactly one block late, whatever the host's buffer size,
-  without the standalone program's queue.
-- The host's tempo and position reach `clock` modules like MIDI does:
-  atomics the plugin writes before each frame and the clocks read at the
-  start of each block, so a block starts exactly where the song is.
-- An integration test drives the plugin through its CLAP entry point as a
-  host would: notes in, sound out, state saved and restored, clocks
-  following a song's tempo.
-- The engine is a library that renders offline, so it is fully testable
-  without any audio hardware. A fuzz test renders random patches with random
-  knob settings and checks the output stays finite and bounded.
+The engine, its threads, and the reasons behind its design are in
+[ARCHITECTURE.md](ARCHITECTURE.md); how to work on it, add a module or a
+preset is in [CONTRIBUTING.md](CONTRIBUTING.md). Changes from one release to
+the next are in [CHANGELOG.md](CHANGELOG.md).
 
 ## Build, run, test
 
