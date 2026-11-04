@@ -69,7 +69,7 @@ fn random_patch(seed: u64) -> (Graph, NodeId) {
 #[test]
 fn every_module_stays_finite_with_any_knobs() {
     let context = Context::new(SR);
-    for info in modules::KINDS {
+    for info in modules::infos() {
         for seed in 0..8 {
             let mut rng = Rng(seed);
             let mut g = Graph::new(SR);
@@ -169,8 +169,7 @@ fn editing_the_patch_while_it_plays_stays_consistent() {
     for _ in 0..2_000 {
         match rng.below(4) {
             0 => {
-                let kinds: Vec<_> = modules::KINDS
-                    .iter()
+                let kinds: Vec<_> = modules::infos()
                     .filter(|k| k.name != master::INFO.name)
                     .collect();
                 let kind = kinds[rng.below(kinds.len())].name;

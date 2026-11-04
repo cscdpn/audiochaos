@@ -63,7 +63,7 @@ pub struct Patch {
 #[serde(deny_unknown_fields)]
 pub struct PatchModule {
     pub name: String,
-    /// One of [`modules::KINDS`].
+    /// One of [`modules::KINDS`], by its name.
     #[serde(rename = "type")]
     pub kind: String,
     /// The sound a sampler plays, as a path, relative to the directory the

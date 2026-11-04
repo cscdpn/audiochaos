@@ -737,10 +737,7 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
     fn show_graph_menu(&mut self, pos: Pos2, ui: &mut Ui, snarl: &mut Snarl<NodeId>) {
         ui.label("Add module");
         // The master is the one output; a patch has exactly one.
-        for info in modules::KINDS
-            .iter()
-            .filter(|i| i.name != master::INFO.name)
-        {
+        for info in modules::infos().filter(|i| i.name != master::INFO.name) {
             if ui
                 .button(info.name)
                 .on_hover_text(info.description)

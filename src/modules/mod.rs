@@ -61,70 +61,132 @@ impl Context {
     }
 }
 
-/// Every kind of module, as patches and the editor's palette name them.
-pub const KINDS: [&ModuleInfo; 26] = [
-    &input::INFO,
-    &midi::INFO,
-    &poly::INFO,
-    &clock::INFO,
-    &sequencer::INFO,
-    &lfo::INFO,
-    &adsr::INFO,
-    &noise::INFO,
-    &sample_hold::INFO,
-    &sampler::INFO,
-    &looper::INFO,
-    &atten::INFO,
-    &invert::INFO,
-    &logic::INFO,
-    &oscillator::INFO,
-    &filter::INFO,
-    &distortion::INFO,
-    &crusher::INFO,
-    &delay::INFO,
-    &chorus::INFO,
-    &flanger::INFO,
-    &phaser::INFO,
-    &univibe::INFO,
-    &vca::INFO,
-    &mixer::INFO,
-    &master::INFO,
+/// A kind of module: what it is, and how to build one. `seed` makes each
+/// noise source different, yet reproducible.
+pub struct Kind {
+    pub info: &'static ModuleInfo,
+    build: fn(context: &Context, seed: u32) -> Box<dyn Module>,
+}
+
+/// Every kind of module, in the editor's palette order. Adding a module is
+/// adding it here.
+pub const KINDS: [Kind; 26] = [
+    Kind {
+        info: &input::INFO,
+        build: |c, _| Box::new(input::Input::new(Arc::clone(&c.input))),
+    },
+    Kind {
+        info: &midi::INFO,
+        build: |c, _| Box::new(midi::Midi::new(Arc::clone(&c.midi), c.sample_rate)),
+    },
+    Kind {
+        info: &poly::INFO,
+        build: |c, _| Box::new(poly::Poly::new(Arc::clone(&c.midi), c.sample_rate)),
+    },
+    Kind {
+        info: &clock::INFO,
+        build: |c, _| Box::new(clock::Clock::new(c.sample_rate, Arc::clone(&c.transport))),
+    },
+    Kind {
+        info: &sequencer::INFO,
+        build: |c, _| Box::new(sequencer::Sequencer::new(c.sample_rate)),
+    },
+    Kind {
+        info: &lfo::INFO,
+        build: |c, _| Box::new(lfo::Lfo::new(c.sample_rate)),
+    },
+    Kind {
+        info: &adsr::INFO,
+        build: |c, _| Box::new(adsr::Adsr::new(c.sample_rate)),
+    },
+    Kind {
+        info: &noise::INFO,
+        build: |_, seed| Box::new(noise::Noise::new(seed)),
+    },
+    Kind {
+        info: &sample_hold::INFO,
+        build: |_, _| Box::new(sample_hold::SampleHold::new()),
+    },
+    Kind {
+        info: &sampler::INFO,
+        build: |c, _| Box::new(sampler::Sampler::new(c.sample_rate)),
+    },
+    Kind {
+        info: &looper::INFO,
+        build: |c, _| Box::new(looper::Looper::new(c.sample_rate)),
+    },
+    Kind {
+        info: &atten::INFO,
+        build: |_, _| Box::new(atten::Atten),
+    },
+    Kind {
+        info: &invert::INFO,
+        build: |_, _| Box::new(invert::Invert),
+    },
+    Kind {
+        info: &logic::INFO,
+        build: |_, _| Box::new(logic::Logic::default()),
+    },
+    Kind {
+        info: &oscillator::INFO,
+        build: |c, _| Box::new(oscillator::Oscillator::new(c.sample_rate)),
+    },
+    Kind {
+        info: &filter::INFO,
+        build: |c, _| Box::new(filter::Filter::new(c.sample_rate)),
+    },
+    Kind {
+        info: &distortion::INFO,
+        build: |_, _| Box::new(distortion::Distortion),
+    },
+    Kind {
+        info: &crusher::INFO,
+        build: |_, _| Box::new(crusher::Crusher::new()),
+    },
+    Kind {
+        info: &delay::INFO,
+        build: |c, _| Box::new(delay::Delay::new(c.sample_rate)),
+    },
+    Kind {
+        info: &chorus::INFO,
+        build: |c, _| Box::new(chorus::Chorus::new(c.sample_rate)),
+    },
+    Kind {
+        info: &flanger::INFO,
+        build: |c, _| Box::new(flanger::Flanger::new(c.sample_rate)),
+    },
+    Kind {
+        info: &phaser::INFO,
+        build: |c, _| Box::new(phaser::Phaser::new(c.sample_rate)),
+    },
+    Kind {
+        info: &univibe::INFO,
+        build: |c, _| Box::new(univibe::Univibe::new(c.sample_rate)),
+    },
+    Kind {
+        info: &vca::INFO,
+        build: |_, _| Box::new(vca::Vca),
+    },
+    Kind {
+        info: &mixer::INFO,
+        build: |_, _| Box::new(mixer::Mixer),
+    },
+    Kind {
+        info: &master::INFO,
+        build: |_, _| Box::new(master::Master),
+    },
 ];
+
+/// The descriptions of every kind of module, in palette order.
+pub fn infos() -> impl Iterator<Item = &'static ModuleInfo> {
+    KINDS.iter().map(|kind| kind.info)
+}
 
 /// A new module of the given kind, or `None` if no kind has that name.
 /// `seed` makes each noise source different, yet reproducible.
 pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>> {
-    let sr = context.sample_rate;
-    let module: Box<dyn Module> = match kind {
-        "input" => Box::new(input::Input::new(Arc::clone(&context.input))),
-        "midi" => Box::new(midi::Midi::new(Arc::clone(&context.midi), sr)),
-        "poly" => Box::new(poly::Poly::new(Arc::clone(&context.midi), sr)),
-        "clock" => Box::new(clock::Clock::new(sr, Arc::clone(&context.transport))),
-        "seq" => Box::new(sequencer::Sequencer::new(sr)),
-        "lfo" => Box::new(lfo::Lfo::new(sr)),
-        "adsr" => Box::new(adsr::Adsr::new(sr)),
-        "noise" => Box::new(noise::Noise::new(seed)),
-        "s&h" => Box::new(sample_hold::SampleHold::new()),
-        "sampler" => Box::new(sampler::Sampler::new(sr)),
-        "looper" => Box::new(looper::Looper::new(sr)),
-        "atten" => Box::new(atten::Atten),
-        "invert" => Box::new(invert::Invert),
-        "logic" => Box::new(logic::Logic::default()),
-        "osc" => Box::new(oscillator::Oscillator::new(sr)),
-        "filter" => Box::new(filter::Filter::new(sr)),
-        "dist" => Box::new(distortion::Distortion),
-        "crush" => Box::new(crusher::Crusher::new()),
-        "delay" => Box::new(delay::Delay::new(sr)),
-        "chorus" => Box::new(chorus::Chorus::new(sr)),
-        "flanger" => Box::new(flanger::Flanger::new(sr)),
-        "phaser" => Box::new(phaser::Phaser::new(sr)),
-        "univibe" => Box::new(univibe::Univibe::new(sr)),
-        "vca" => Box::new(vca::Vca),
-        "mix" => Box::new(mixer::Mixer),
-        "master" => Box::new(master::Master),
-        _ => return None,
-    };
-    Some(module)
+    let kind = KINDS.iter().find(|k| k.info.name == kind)?;
+    Some((kind.build)(context, seed))
 }
 
 #[cfg(test)]
@@ -134,7 +196,7 @@ mod tests {
 
     #[test]
     fn every_kind_builds_a_module_of_that_kind() {
-        for info in KINDS {
+        for info in infos() {
             let module = build(info.name, &Context::new(48_000.0), 1).unwrap();
             assert_eq!(module.info().name, info.name);
         }
@@ -142,8 +204,16 @@ mod tests {
     }
 
     #[test]
+    fn no_two_kinds_share_a_name() {
+        let mut names: Vec<_> = infos().map(|info| info.name).collect();
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), KINDS.len());
+    }
+
+    #[test]
     fn every_module_and_knob_says_what_it_does() {
-        for info in KINDS {
+        for info in infos() {
             assert!(!info.description.is_empty(), "{}", info.name);
             for param in info.params {
                 assert!(!param.help.is_empty(), "{} {}", info.name, param.name);
@@ -153,14 +223,14 @@ mod tests {
 
     #[test]
     fn every_knob_fits_in_the_table_of_modulated_values() {
-        for info in KINDS {
+        for info in infos() {
             assert!(info.params.len() <= MAX_PARAMS, "{}", info.name);
         }
     }
 
     #[test]
     fn every_output_has_details() {
-        for info in KINDS {
+        for info in infos() {
             assert_eq!(
                 info.output_details.len(),
                 info.outputs.len(),
