@@ -139,8 +139,12 @@ impl State {
     }
 }
 
-/// Decodes one controller's messages into the shared state.
-#[derive(Default)]
+/// Every MIDI note number, 7 bits.
+const NOTES: usize = 128;
+
+/// Decodes one controller's messages into the shared state. It never
+/// allocates while handling messages, since the plugin runs it on the audio
+/// thread.
 pub struct Parser {
     /// Keys held down, oldest first: releasing the newest falls back to the
     /// one before, like a monophonic synth.
@@ -149,6 +153,17 @@ pub struct Parser {
     /// to free the voice released longest ago and steal the oldest note.
     voice_ages: [u64; VOICES],
     messages: u64,
+}
+
+impl Default for Parser {
+    fn default() -> Self {
+        Self {
+            // Room for every note at once, as a key is held at most once.
+            held: Vec::with_capacity(NOTES),
+            voice_ages: [0; VOICES],
+            messages: 0,
+        }
+    }
 }
 
 impl Parser {
@@ -239,6 +254,20 @@ fn pad(note: u8) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn holding_every_key_needs_no_more_memory() {
+        let state = State::default();
+        let mut parser = Parser::default();
+        let room = parser.held.capacity();
+        for note in 0..NOTES as u8 {
+            parser.handle(&[0x90, note, 100], &state);
+            parser.handle(&[0x90, note, 100], &state);
+        }
+        // Below the lowest key, notes are pads.
+        assert_eq!(parser.held.len(), NOTES - usize::from(LOWEST_KEY));
+        assert_eq!(parser.held.capacity(), room);
+    }
 
     #[test]
     fn knobs_turn_without_a_controller_too() {
