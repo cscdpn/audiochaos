@@ -15,6 +15,10 @@ editor = ["dep:egui", "dep:egui-snarl", "dep:rfd"]
 # The standalone program: sound card, MIDI ports, its own window, the
 # terminal UI.
 app = ["editor", "dep:cpal", "dep:eframe", "dep:midir", "dep:ratatui"]
+# Low latency on Windows, through the sound cards' ASIO drivers. Off by
+# default: the build needs LLVM and downloads Steinberg's ASIO SDK, whose
+# licence (GPLv3 or Steinberg's own) then covers the program built.
+asio = ["app", "cpal/asio"]
 
 [[bin]]
 name = "audiochaos"
@@ -22,7 +26,10 @@ path = "src/main.rs"
 required-features = ["app"]
 
 [dependencies]
-cpal = { version = "0.18.2", optional = true }
+# realtime: the audio thread gets real-time priority where cpal can give it
+# safely, that is in low latency (ALSA hardware devices, through RealtimeKit
+# over D-Bus, so no special user rights) and with WASAPI.
+cpal = { version = "0.18.2", optional = true, features = ["realtime-dbus"] }
 # Pinned to 0.36: egui-snarl 0.12 is built on egui 0.36, and so is
 # nice-plug-egui 0.5, which draws the editor in the plugin. The glow
 # (OpenGL) backend instead of the default wgpu: plenty for 2D blocks and

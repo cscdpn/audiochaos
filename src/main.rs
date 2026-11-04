@@ -12,7 +12,8 @@ use audiochaos::session::{self, Devices};
 use audiochaos::tui::{self, App};
 use audiochaos::{gui, presets};
 
-const USAGE: &str = "usage: audiochaos [--tui] [--buffer FRAMES] [preset | patch.json]
+const USAGE: &str =
+    "usage: audiochaos [--tui] [--low-latency] [--buffer FRAMES] [preset | patch.json]
        audiochaos --render out.wav [--seconds N] [preset | patch.json]
        audiochaos --midi-monitor
 
@@ -22,6 +23,9 @@ built-in preset or patch file (default: the first preset).
 --buffer asks the sound card for callbacks of that many frames, for less
 latency on the inputs: 128 or 256 rather than the system's default, often
 1024. Too small and the sound breaks up.
+
+--low-latency plays on the sound card directly rather than through the
+system's mixer, as the Audio menu's Low latency does: see the README.
 
 --render writes N seconds (default 30) of the patch to a WAV file instead,
 without opening the sound card.
@@ -51,6 +55,7 @@ struct Args {
     render: Option<PathBuf>,
     seconds: Option<f32>,
     buffer: Option<u32>,
+    low_latency: bool,
     midi_monitor: bool,
 }
 
@@ -62,6 +67,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
         render: None,
         seconds: None,
         buffer: None,
+        low_latency: false,
         midi_monitor: false,
     };
     while let Some(arg) = args.next() {
@@ -72,6 +78,7 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
         match arg.as_str() {
             "-h" | "--help" => return Ok(None),
             "--tui" => parsed.tui = true,
+            "--low-latency" => parsed.low_latency = true,
             "--midi-monitor" => parsed.midi_monitor = true,
             "--render" => parsed.render = Some(value()?.into()),
             "--seconds" => {
@@ -102,6 +109,11 @@ fn parse_args(mut args: impl Iterator<Item = String>) -> Result<Option<Args>, St
     }
     if parsed.buffer.is_some() && parsed.render.is_some() {
         return Err(format!("--buffer and --render do not go together\n{USAGE}"));
+    }
+    if parsed.low_latency && parsed.render.is_some() {
+        return Err(format!(
+            "--low-latency and --render do not go together\n{USAGE}"
+        ));
     }
     if parsed.seconds.is_some() && parsed.render.is_none() {
         return Err(format!("--seconds only goes with --render\n{USAGE}"));
@@ -136,10 +148,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     let (midi_inputs, midi_status) = session::connect_midi(&midi_state);
     let devices = Devices {
         buffer: args.buffer,
+        low_latency: args.low_latency,
         ..Devices::default()
     };
     let session = session::start(&patch, &devices, &midi_state)?;
-    let status = [midi_status]
+    let status = [format!("playing on {}", session.output), midi_status]
         .into_iter()
         .chain(session.problems.iter().cloned())
         .collect::<Vec<_>>()
@@ -241,6 +254,15 @@ mod tests {
         assert!(error(&["--buffer", "0"]).starts_with("invalid buffer size"));
         assert!(error(&["--buffer", "big"]).starts_with("invalid buffer size"));
         assert!(error(&["--buffer", "64", "--render", "x.wav"]).contains("do not go together"));
+    }
+
+    #[test]
+    fn low_latency_goes_with_the_sound_card_only() {
+        assert!(!parse(&[]).unwrap().unwrap().low_latency);
+        let args = parse(&["--low-latency", "--tui"]).unwrap().unwrap();
+        assert!(args.low_latency && args.tui);
+        let error = parse(&["--low-latency", "--render", "x.wav"]).unwrap_err();
+        assert!(error.contains("do not go together"));
     }
 
     #[test]

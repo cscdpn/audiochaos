@@ -86,11 +86,17 @@ impl Capture {
     /// Queues what one input callback got, `channels` interleaved samples
     /// per frame.
     pub fn push(&mut self, data: &[f32], channels: usize) {
+        self.push_with(data, channels, |sample| sample);
+    }
+
+    /// `push` for cards that hand over other samples than floats, which
+    /// `to_f32` converts frame by frame, so nothing is allocated.
+    pub fn push_with<T: Copy>(&mut self, data: &[T], channels: usize, to_f32: impl Fn(T) -> f32) {
         self.callbacks
             .input
             .fetch_max(data.len() / channels, Ordering::Relaxed);
         for samples in data.chunks_exact(channels) {
-            let frame = std::array::from_fn(|c| samples.get(c).copied().unwrap_or(0.0));
+            let frame = std::array::from_fn(|c| samples.get(c).map_or(0.0, |&s| to_f32(s)));
             if self.frames.push(frame).is_err() {
                 self.glitches.fetch_add(1, Ordering::Relaxed);
                 return;
@@ -297,5 +303,17 @@ mod tests {
         f.capture.push(&data, 4);
         let (one, two) = f.block();
         assert_eq!((one[0], two[0]), (1.0, 2.0));
+    }
+
+    #[test]
+    fn integer_samples_come_in_as_floats() {
+        let mut f = fixture();
+        let data: Vec<i32> = (0..BLOCK).flat_map(|_| [i32::MAX / 2, i32::MIN]).collect();
+        let to_f32 = |s: i32| s as f32 / -(i32::MIN as f32);
+        f.capture.push_with(&data, 2, to_f32);
+        f.capture.push_with(&data, 2, to_f32);
+        let (one, two) = f.block();
+        assert!((one[0] - 0.5).abs() < 1e-6, "{}", one[0]);
+        assert_eq!(two[0], -1.0);
     }
 }

@@ -6,7 +6,8 @@
 use std::error::Error;
 use std::sync::Arc;
 
-use cpal::BufferSize;
+use cpal::traits::DeviceTrait;
+use cpal::{BufferSize, StreamConfig};
 
 use crate::engine::audio::{self, Playback};
 use crate::engine::control::{Controller, Engine};
@@ -28,6 +29,9 @@ pub struct Devices {
     pub input: Option<String>,
     /// Callback size to ask the cards for, in frames.
     pub buffer: Option<u32>,
+    /// Whether to reach the cards as directly as the system allows: see
+    /// `audio`.
+    pub low_latency: bool,
 }
 
 pub struct Session {
@@ -36,7 +40,7 @@ pub struct Session {
     /// Owned so the sound plays exactly as long as the session lives.
     pub playback: Playback,
     pub recorder: Recorder,
-    /// The output's name, for people.
+    /// The output's name and buffer, for people.
     pub output: String,
     /// What did not work out, though the synth plays: missing sound files,
     /// a buffer size or an input the card refused.
@@ -50,7 +54,12 @@ pub fn start(
     devices: &Devices,
     midi: &Arc<midi::State>,
 ) -> Result<Session, Box<dyn Error>> {
-    let (device, config) = audio::output(devices.output.as_deref(), devices.buffer)?;
+    let card = audio::output(
+        devices.output.as_deref(),
+        devices.buffer,
+        devices.low_latency,
+    )?;
+    let config = card.config;
     let context = Context {
         sample_rate: config.sample_rate as f32,
         midi: Arc::clone(midi),
@@ -68,10 +77,22 @@ pub fn start(
             "the sound card refused a buffer of {frames} frames"
         ));
     }
-    let input = match audio::input(devices.input.as_deref(), config.sample_rate, devices.buffer) {
-        Ok((device, input_config)) => Some(audio::Input {
-            device,
-            config: input_config,
+    // In low latency, the card plays alone, so its own input is the obvious
+    // one: a second card would drift from it, and ASIO opens one at a time.
+    let input_id = devices.input.clone().or_else(|| {
+        devices
+            .low_latency
+            .then(|| card.device.id().ok().map(|id| id.to_string()))
+            .flatten()
+    });
+    let input = match audio::input(
+        input_id.as_deref(),
+        config.sample_rate,
+        config_buffer(&config).or(devices.buffer),
+        devices.low_latency,
+    ) {
+        Ok(endpoint) => Some(audio::Input {
+            endpoint,
             live: Arc::clone(&context.input),
         }),
         Err(e) => {
@@ -79,7 +100,7 @@ pub fn start(
             None
         }
     };
-    let playback = audio::play(&device, config, engine, tap, input)?;
+    let playback = audio::play(&card, engine, tap, input)?;
     if let Some(e) = playback.input_problem() {
         problems.push(format!("no audio input: {e}"));
     }
@@ -88,9 +109,29 @@ pub fn start(
         context,
         playback,
         recorder,
-        output: audio::name(&device),
+        output: describe(&audio::name(&card.device), &config, devices.low_latency),
         problems,
     })
+}
+
+fn config_buffer(config: &StreamConfig) -> Option<u32> {
+    match config.buffer_size {
+        BufferSize::Fixed(frames) => Some(frames),
+        BufferSize::Default => None,
+    }
+}
+
+/// `name`, and how long a callback lasts when it is known: the delay from a
+/// key press to the sound is a couple of them.
+fn describe(name: &str, config: &StreamConfig, low_latency: bool) -> String {
+    let mode = if low_latency { ", low latency" } else { "" };
+    match config_buffer(config) {
+        Some(frames) => {
+            let ms = 1000.0 * frames as f32 / config.sample_rate as f32;
+            format!("{name}{mode}, {frames} frames ({ms:.1} ms)")
+        }
+        None => format!("{name}{mode}"),
+    }
 }
 
 /// Listens to every MIDI controller plugged in, and says which, or why not.
@@ -103,5 +144,24 @@ pub fn connect_midi(state: &Arc<midi::State>) -> (Option<midi::Inputs>, String) 
             (Some(inputs), status)
         }
         Err(e) => (None, format!("no MIDI: {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_output_says_how_long_a_buffer_lasts_when_known() {
+        let config = |buffer_size| StreamConfig {
+            channels: 2,
+            sample_rate: 48_000,
+            buffer_size,
+        };
+        assert_eq!(
+            describe("UMC202HD", &config(BufferSize::Fixed(256)), true),
+            "UMC202HD, low latency, 256 frames (5.3 ms)"
+        );
+        assert_eq!(describe("PCH", &config(BufferSize::Default), false), "PCH");
     }
 }

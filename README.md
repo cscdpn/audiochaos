@@ -64,7 +64,8 @@ the knobs.
   builds the patch again on the new card, which may run at another rate: knobs,
   cables and sounds stay, but sequencers start over and loopers forget their
   recording; a running recording is saved. If the card does not open, the
-  synth plays on where it was.
+  synth plays on where it was. **Low latency** and **Buffer** set how
+  quickly the synth answers (see [Low latency](#low-latency)).
 
 ### DAW plugin
 
@@ -241,14 +242,38 @@ recording replaces the last one, and recordings are not saved with the patch.
 through a filter and a delay.
 
 - **Latency.** The sound reaches the speakers about two callbacks late, one
-  for each stream. `--buffer 128` asks the sound card for smaller callbacks
-  than the system's usual 1024 frames (about 21 ms at 48 kHz each). On Linux,
-  ALSA's shared devices only take 1024, so the round trip stays near 45 ms;
-  the status bar says so when the card refuses. That is fine for looping, but
-  noticeable when playing through the synth: to hear yourself, prefer the
-  interface's direct monitor, and use the synth for what it adds.
+  for each stream. Through the system's mixer, callbacks are often 1024
+  frames (about 21 ms at 48 kHz each), so the round trip is near 45 ms: fine
+  for looping, noticeable when playing through the synth. Turn on
+  [Low latency](#low-latency) to hear yourself through it, or use the
+  interface's direct monitor.
 - **Feedback.** A microphone near the speakers, plus delay feedback, howls.
   Use headphones, or keep the microphone away and the volume down.
+
+### Low latency
+
+By default the synth plays through the system's mixer, alongside other
+programs, which costs time: on Linux, ALSA's shared devices only take
+callbacks of 1024 frames. **Low latency**, in the editor's **Audio** menu or
+with `--low-latency`, plays on the card directly instead. **Buffer** in the
+same menu, or `--buffer`, sets the callback size: smaller answers sooner,
+until the audio error count in the header starts rising and the sound breaks
+up. The status bar says which card plays, and how long a callback lasts.
+
+- **Linux.** The card's own hardware device, with real-time priority for the
+  audio thread, given by RealtimeKit (so no special rights needed). 256
+  frames (5.3 ms at 48 kHz) unless another size is picked: it plays cleanly
+  on a laptop's built-in card, where 128 breaks up; USB interfaces often take
+  128 or 64. The card then plays for the synth alone: other programs cannot
+  use it meanwhile, and the synth cannot take it while they play on it
+  ("device is temporarily busy"). Stop them, or run the synth with
+  `pasuspender -- audiochaos --low-latency` under PulseAudio. With no card
+  picked, the first one that opens plays; the input is the same card's.
+- **Windows.** Through the card's ASIO driver (for the UMC202HD, Behringer's
+  own driver), in a build with ASIO, which is off by default: see
+  [Build](#build-run-test). The buffer size is the driver's, set in its
+  control panel, unless another is picked. Input and output must be the same
+  driver; with no input picked, it is.
 
 ### Patches
 
@@ -418,6 +443,22 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
   queue then catches up at once, or waits to refill, with a click, rather
   than letting the latency grow. The input is not resampled: it must run at
   the output's rate.
+- Low latency on Linux opens ALSA's `hw:` device rather than `plughw:`,
+  which would convert to floats for us: cpal only gives real-time priority
+  to devices that cannot route to a sound server, and `plughw:` is a plugin.
+  So the engine converts its samples to the card's own format, 32-bit
+  integers on most cards. The menus still list each card by its default
+  device; low latency opens the same card's `hw:` device, which ALSA names
+  by index, found through `/proc/asound`.
+- Switching sound cards opens the new ones before closing the old, so a card
+  that does not open leaves the sound playing. A card in low latency takes
+  one program at a time, which may be the synth itself on the cards it is
+  leaving: then the old streams stop, the new ones are tried again, and the
+  old ones play again if that fails too.
+- ASIO is behind a cargo feature because of its build: it needs LLVM, and
+  downloads Steinberg's ASIO SDK, which is under GPLv3 or Steinberg's own
+  licence. The source here stays MIT; a program built with ASIO falls under
+  the SDK's licence too, which matters only when sharing that program.
 - Stopping the engine is an atomic flag rather than a queued command, so it
   works even when the queue is full. A stopped engine still drains the queue
   and the input, so edits apply and the input never overflows; it only skips
@@ -472,9 +513,19 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
 
 ## Build, run, test
 
-Requires a recent stable Rust toolchain and, on Linux, the ALSA development
-headers (`alsa-lib` on Arch, `libasound2-dev` on Debian/Ubuntu). It also runs
-on Windows, MIDI controllers included, with nothing else to install.
+Requires a recent stable Rust toolchain and, on Linux, the ALSA and D-Bus
+development headers (`alsa-lib` and `dbus` on Arch, `libasound2-dev` and
+`libdbus-1-dev` on Debian/Ubuntu); D-Bus asks RealtimeKit for the audio
+thread's priority. It also runs on Windows, MIDI controllers included, with
+nothing else to install.
+
+[Low latency](#low-latency) on Windows needs ASIO, which takes
+[LLVM](https://releases.llvm.org/) installed (`winget install LLVM.LLVM`)
+and this build, which downloads Steinberg's ASIO SDK the first time:
+
+```sh
+cargo build --release --features asio
+```
 
 ```sh
 just build
@@ -483,6 +534,7 @@ just run bass     # bass preset
 just run my.json  # a patch file
 just run --render out.wav --seconds 60   # render to WAV, no sound card
 just run --buffer 128 looper             # smaller sound card buffers
+just run --low-latency looper            # the sound card without the mixer
 just run --midi-monitor                  # what the MIDI controllers send
 just tui          # terminal UI instead of the editor
 just bundle         # VST3 and CLAP plugins into target/bundled/
@@ -506,8 +558,8 @@ A USB controller plugged in at boot can become ALSA's card 0, the system
 default, although it has no audio output. The first sound card that opens then
 takes over, after a few harmless `ALSA lib` lines on the terminal. On Linux,
 the **Audio** menu lists each card's own default device, which shares the card
-with other programs; ALSA's other entries for the same card are exclusive,
-surround layouts or HDMI.
+with other programs; ALSA's other entries for the same card are exclusive
+(what low latency opens), surround layouts or HDMI.
 
 The header shows an audio error count. One error at startup is normal with
 the ALSA backend; a count that keeps rising means buffer underruns.
