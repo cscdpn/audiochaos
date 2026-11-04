@@ -1,5 +1,7 @@
 # audiochaos
 
+[![CI](https://github.com/cscdpn/audiochaos/actions/workflows/ci.yml/badge.svg)](https://github.com/cscdpn/audiochaos/actions/workflows/ci.yml)
+
 A modular synthesizer written in Rust, built for chaotic, aggressive sounds:
 small signal-processing bricks that you route together however you like,
 in a graphical node editor or a terminal UI, on its own or as a VST3 or CLAP

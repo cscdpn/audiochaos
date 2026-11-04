@@ -1,0 +1,28 @@
+# cargo-about's settings, for THIRD-PARTY-LICENSES.html in the release
+# archives (see .github/workflows/release.yml). `accepted` lists every
+# license our dependencies use, most preferred first: when a crate offers a
+# choice, the first one here is picked. A new dependency under another
+# license fails the release until it is reviewed and added.
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "ISC",
+    "Zlib",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-1-Clause",
+    "0BSD",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    # egui's built-in fonts.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+    # audio_thread_priority, which cpal uses for the real-time audio thread.
+    "MPL-2.0",
+    # terminfo, for the terminal UI.
+    "WTFPL",
+]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+ignore-build-dependencies = true
+ignore-dev-dependencies = true

@@ -191,3 +191,5 @@ positions are saved with the patch but only the editor reads them.
   following a song's tempo.
 - What no test covers: real sound cards and MIDI controllers, the window
   itself, and the plugin inside a real DAW. Those are checked by hand.
+- CI runs the tests on Linux and Windows at every push, and builds the
+  release archives from tags (see [CONTRIBUTING.md](CONTRIBUTING.md#continuous-integration)).

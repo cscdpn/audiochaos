@@ -62,10 +62,31 @@ and list it in `src/presets.rs`. Presets are compiled in, listed in the
 Patch menu, checked to load and round-trip, and played by the allocation
 test.
 
+## Continuous integration
+
+GitHub Actions, free for a public repository:
+
+- `.github/workflows/ci.yml`, on every push to a branch: fmt and clippy,
+  then every test on Linux and on Windows, and a build with ASIO on
+  Windows, where LLVM is at hand.
+- `.github/workflows/release.yml`, on a `v*` tag: builds the program and
+  the plugins for Linux (`.tar.gz`) and Windows (`.zip`), with
+  `THIRD-PARTY-LICENSES.html` from [cargo-about](https://github.com/EmbarkStudios/cargo-about),
+  and publishes them as a GitHub release whose notes are the version's
+  section of `CHANGELOG.md`. Run by hand from the Actions tab, it only
+  builds the archives, to try it before tagging. The release archives have
+  no ASIO, whose SDK licence would cover them.
+
+A dependency under a license not yet in `about.toml` fails the release
+until it is reviewed and added there.
+
 ## Releasing
 
-1. Update `CHANGELOG.md` and the version in `[workspace.package]` of the
-   root `Cargo.toml`, which every crate shares.
+1. Set the version in `[workspace.package]` of the root `Cargo.toml`,
+   which every crate shares, and date its section of `CHANGELOG.md`:
+   `## [0.1.0] - 2026-11-10`. The release fails on a mismatched tag or an
+   undated section.
 2. `just lint && just test`, then the hand checks: sound, MIDI controller,
    sound card input, low latency, the plugin in a DAW, on Linux and Windows.
-3. Tag `vX.Y.Z` and push the tag.
+3. Commit, push, wait for CI to pass, then tag and push the tag:
+   `git tag -a v0.1.0 -m "audiochaos 0.1.0" && git push origin v0.1.0`.

@@ -1,0 +1,59 @@
+# On every push to a branch: lint, then test and build on Linux and Windows.
+# Tags go through release.yml instead.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+
+# A newer push to the same branch makes the running checks pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev libwayland-dev
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # The plugin builds the library without the standalone program's parts.
+      - run: cargo clippy --no-default-features --features editor --all-targets --locked -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: System libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev libwayland-dev
+      - uses: Swatinem/rust-cache@v2
+      # Builds everything, the program and the plugin included, and runs
+      # every test: none needs a sound card or a screen.
+      - run: cargo test --workspace --locked
+
+  # ASIO is opt-in and needs LLVM and Steinberg's SDK, which the build
+  # downloads: checked here, where both are at hand, since no one builds it
+  # every day.
+  asio:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --features asio --locked

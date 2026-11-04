@@ -1,0 +1,119 @@
+# On a version tag (v0.1.0...): builds the program and the plugins for Linux
+# and Windows, and publishes them as a GitHub release, with the CHANGELOG
+# section of that version as its notes. Run by hand from the Actions tab, it
+# builds the archives without publishing anything, to try it out.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # The licenses of every dependency, which the MIT licence and most others
+  # require shipping with binaries. Rendered once: they are the same for both
+  # systems (about.toml lists the targets).
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about@0.9.3
+      - run: cargo about generate --workspace --locked --fail about.hbs -o THIRD-PARTY-LICENSES.html
+      - uses: actions/upload-artifact@v7
+        with:
+          name: licenses
+          path: THIRD-PARTY-LICENSES.html
+
+  build:
+    needs: licenses
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: windows-latest
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: System libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libdbus-1-dev libwayland-dev
+      - name: Version
+        run: |
+          id=$(cargo pkgid -p audiochaos)
+          version=${id##*[#@]}
+          if [[ $GITHUB_REF_TYPE == tag && $GITHUB_REF_NAME != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match version $version in Cargo.toml"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - run: cargo build --release --locked
+      - run: cargo xtask bundle audiochaos-plugin --release
+      - uses: actions/download-artifact@v8
+        with:
+          name: licenses
+      - name: Archive
+        run: |
+          name=audiochaos-$VERSION-${{ matrix.platform }}
+          mkdir -p "dist/$name"
+          if [[ $RUNNER_OS == Windows ]]; then exe=.exe; else exe=; fi
+          cp "target/release/audiochaos$exe" "dist/$name/"
+          cp -r target/bundled/audiochaos.vst3 target/bundled/audiochaos.clap "dist/$name/"
+          cp README.md CHANGELOG.md LICENSE THIRD-PARTY-LICENSES.html "dist/$name/"
+          cd dist
+          if [[ $RUNNER_OS == Windows ]]; then
+            archive=$name.zip
+            7z a "$archive" "$name"
+          else
+            archive=$name.tar.gz
+            tar -czf "$archive" "$name"
+          fi
+          echo "ARCHIVE=dist/$archive" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.platform }}
+          path: ${{ env.ARCHIVE }}
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "*-x86_64"
+          path: dist
+          merge-multiple: true
+      - name: Notes from the changelog
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v head="## [$version]" '
+            index($0, head) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          heading=$(grep -F "## [$version]" CHANGELOG.md || true)
+          if [[ -z $heading || $heading == *unreleased* ]]; then
+            echo "::error::CHANGELOG.md needs a dated '## [$version] - YYYY-MM-DD' section"
+            exit 1
+          fi
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag --title "audiochaos ${GITHUB_REF_NAME#v}" --notes-file notes.md
