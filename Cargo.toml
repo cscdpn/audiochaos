@@ -1,11 +1,25 @@
 [package]
 name = "audiochaos"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
+description = "A modular synthesizer for chaotic, aggressive sounds, standalone or as a VST3/CLAP plugin"
+readme = "README.md"
+keywords = ["synthesizer", "audio", "modular", "music", "dsp"]
+categories = ["multimedia::audio"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Not on crates.io: the library exists for the program and the plugin.
+publish = false
 
 [workspace]
 members = ["plugin", "xtask"]
+
+# Shared by every crate of the workspace, so a release bumps one version.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/cscdpn/audiochaos"
 
 [features]
 default = ["app"]
