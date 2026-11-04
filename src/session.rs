@@ -55,6 +55,7 @@ pub fn start(
         sample_rate: config.sample_rate as f32,
         midi: Arc::clone(midi),
         input: Arc::new(LiveInput::default()),
+        transport: Arc::default(),
     };
     let (graph, output) = patch.build(&context)?;
     let mut problems = patch::sample_problems(&graph);

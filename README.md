@@ -84,6 +84,10 @@ Ardour only loads VST3; Reaper and Bitwig take either.
 - **Knob 1** to **Knob 8** are the `midi` modules' knobs as parameters the DAW
   can automate. Moving one in the DAW takes over that knob; a controller
   turning it after that takes it back.
+- `clock` blocks follow the song: its tempo always, and while it plays,
+  its position, so bars start with the song's bars (in 4/4). Stopped, they
+  run on at the song's tempo, so a patch still plays live. Clock the
+  sequencers, LFOs and delays from a `clock` to keep them in time.
 - The track's audio reaches `input` modules, one 64-sample block late.
 - At another sample rate, the patch is built again: knobs, cables and sounds
   stay, sequencers start over and loopers forget their recording.
@@ -353,6 +357,10 @@ gives one tempo to all of them: for echoes on the dotted eighth over a
 sequence in eighths, patch its `dotted 8th` into the delay's `clock` and its
 `8th` into the sequencer's.
 
+In the DAW plugin, the song's tempo replaces the `tempo` knob and the
+tapped tempo, and while the song plays, the clock jumps to where the song
+is at every block (see [DAW plugin](#daw-plugin)).
+
 To tap the tempo, patch a MIDI pad into the clock's `tap` input and hit it
 in rhythm. The first hit starts a bar, the next ones set the tempo and pull
 the nearest beat onto each hit; the last five are averaged, and a pause of
@@ -447,8 +455,12 @@ and is greyed out while `tap` has a cable. A pad straight into a delay's
   Each input frame goes into the block the engine computes next, so the
   input comes out exactly one block late, whatever the host's buffer size,
   without the standalone program's queue.
+- The host's tempo and position reach `clock` modules like MIDI does:
+  atomics the plugin writes before each frame and the clocks read at the
+  start of each block, so a block starts exactly where the song is.
 - An integration test drives the plugin through its CLAP entry point as a
-  host would: notes in, sound out, state saved and restored.
+  host would: notes in, sound out, state saved and restored, clocks
+  following a song's tempo.
 - The engine is a library that renders offline, so it is fully testable
   without any audio hardware. A fuzz test renders random patches with random
   knob settings and checks the output stays finite and bounded.

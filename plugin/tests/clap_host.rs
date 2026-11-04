@@ -5,14 +5,18 @@
 use std::ffi::{CStr, c_char, c_void};
 use std::ptr;
 
+use audiochaos::patch::Patch;
 use audiochaos::presets;
 use clap_sys::audio_buffer::clap_audio_buffer;
 use clap_sys::events::{
-    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON, clap_event_header, clap_event_note,
-    clap_input_events, clap_output_events,
+    CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON, CLAP_EVENT_TRANSPORT,
+    CLAP_TRANSPORT_HAS_BEATS_TIMELINE, CLAP_TRANSPORT_HAS_TEMPO, CLAP_TRANSPORT_IS_PLAYING,
+    clap_event_header, clap_event_note, clap_event_transport, clap_input_events,
+    clap_output_events,
 };
 use clap_sys::ext::state::{CLAP_EXT_STATE, clap_plugin_state};
 use clap_sys::factory::plugin_factory::{CLAP_PLUGIN_FACTORY_ID, clap_plugin_factory};
+use clap_sys::fixedpoint::CLAP_BEATTIME_FACTOR;
 use clap_sys::host::clap_host;
 use clap_sys::plugin::clap_plugin;
 use clap_sys::process::{CLAP_PROCESS_ERROR, clap_process};
@@ -84,6 +88,11 @@ impl Instance {
 
     /// `seconds` of output, left channel, with `notes` at the start.
     fn play(&self, notes: &[clap_event_note], seconds: f64) -> Vec<f32> {
+        self.play_song(notes, None, seconds)
+    }
+
+    /// The same, while a song at `tempo` plays from its start, if any.
+    fn play_song(&self, notes: &[clap_event_note], tempo: Option<f64>, seconds: f64) -> Vec<f32> {
         let mut heard = Vec::new();
         let total = (seconds * SAMPLE_RATE) as usize;
         let mut first = true;
@@ -91,14 +100,43 @@ impl Instance {
             let frames = MAX_FRAMES as usize;
             let events = if first { notes } else { &[] };
             first = false;
-            let (left, right) = self.process(events, frames);
+            let song = tempo.map(|tempo| {
+                let beats = heard.len() as f64 / SAMPLE_RATE * tempo / 60.0;
+                playing(tempo, beats)
+            });
+            let (left, right) = self.process(events, song.as_ref(), frames);
             assert_eq!(left, right, "the same sound on both sides");
             heard.extend(left);
         }
         heard
     }
 
-    fn process(&self, notes: &[clap_event_note], frames: usize) -> (Vec<f32>, Vec<f32>) {
+    /// Loads `patch` as a host restores a project.
+    fn load_patch(&self, patch: &Patch) {
+        // nice-plug's JSON, after its length on 8 bytes.
+        let saved = self.save();
+        let mut state: serde_json::Value = serde_json::from_slice(&saved[8..]).unwrap();
+        let fields = state["fields"].as_object_mut().expect("persistent fields");
+        assert!(
+            fields.contains_key("patch"),
+            "the patch is saved: {fields:?}"
+        );
+        fields.insert(
+            "patch".to_string(),
+            serde_json::Value::String(serde_json::to_string(patch).unwrap()),
+        );
+        let json = serde_json::to_vec(&state).unwrap();
+        let mut edited = (json.len() as u64).to_le_bytes().to_vec();
+        edited.extend(json);
+        self.load(&edited);
+    }
+
+    fn process(
+        &self,
+        notes: &[clap_event_note],
+        song: Option<&clap_event_transport>,
+        frames: usize,
+    ) -> (Vec<f32>, Vec<f32>) {
         let mut inputs = [vec![0.0f32; frames], vec![0.0f32; frames]];
         let mut outputs = [vec![0.0f32; frames], vec![0.0f32; frames]];
         let mut input_channels = inputs.each_mut().map(|c| c.as_mut_ptr());
@@ -128,7 +166,7 @@ impl Instance {
         let process = clap_process {
             steady_time: -1,
             frames_count: frames as u32,
-            transport: ptr::null(),
+            transport: song.map_or(ptr::null(), |song| song as *const _),
             audio_inputs: &input,
             audio_outputs: &mut output,
             audio_inputs_count: 1,
@@ -248,6 +286,34 @@ fn note_on(key: i16) -> clap_event_note {
     }
 }
 
+/// A song playing at `tempo`, `beats` from its start.
+fn playing(tempo: f64, beats: f64) -> clap_event_transport {
+    clap_event_transport {
+        header: clap_event_header {
+            size: size_of::<clap_event_transport>() as u32,
+            time: 0,
+            space_id: CLAP_CORE_EVENT_SPACE_ID,
+            type_: CLAP_EVENT_TRANSPORT,
+            flags: 0,
+        },
+        flags: CLAP_TRANSPORT_HAS_TEMPO
+            | CLAP_TRANSPORT_HAS_BEATS_TIMELINE
+            | CLAP_TRANSPORT_IS_PLAYING,
+        song_pos_beats: (beats * CLAP_BEATTIME_FACTOR as f64) as i64,
+        song_pos_seconds: 0,
+        tempo,
+        tempo_inc: 0.0,
+        loop_start_beats: 0,
+        loop_end_beats: 0,
+        loop_start_seconds: 0,
+        loop_end_seconds: 0,
+        bar_start: 0,
+        bar_number: 0,
+        tsig_num: 4,
+        tsig_denom: 4,
+    }
+}
+
 fn loudest(samples: &[f32]) -> f32 {
     samples.iter().fold(0.0, |max, s| max.max(s.abs()))
 }
@@ -276,23 +342,41 @@ fn the_state_restores_in_another_instance() {
 #[test]
 fn a_restored_patch_is_the_one_that_plays() {
     let instance = Instance::new();
-    // nice-plug's JSON, after its length on 8 bytes.
-    let saved = instance.save();
-    let mut state: serde_json::Value = serde_json::from_slice(&saved[8..]).unwrap();
-    let fields = state["fields"].as_object_mut().expect("persistent fields");
-    assert!(
-        fields.contains_key("patch"),
-        "the patch is saved: {fields:?}"
-    );
     // The chaos preset plays on its own, without a note.
-    let chaos = presets::get("chaos").unwrap();
-    fields.insert(
-        "patch".to_string(),
-        serde_json::Value::String(serde_json::to_string(&chaos).unwrap()),
-    );
-    let json = serde_json::to_vec(&state).unwrap();
-    let mut edited = (json.len() as u64).to_le_bytes().to_vec();
-    edited.extend(json);
-    instance.load(&edited);
+    instance.load_patch(&presets::get("chaos").unwrap());
     assert!(loudest(&instance.play(&[], 1.0)) > 0.1);
+}
+
+#[test]
+fn clocks_follow_the_songs_tempo_and_bars() {
+    let instance = Instance::new();
+    // A saw let through on each beat of a clock whose knob says 120 BPM.
+    let patch = Patch::from_json(
+        r#"{
+            "version": 2,
+            "modules": [
+                { "name": "clock", "type": "clock" },
+                { "name": "osc", "type": "osc" },
+                { "name": "vca", "type": "vca" },
+                { "name": "master", "type": "master" }
+            ],
+            "knobs": { "clock": { "tempo": 120.0 }, "vca": { "gain": 0.0 } },
+            "cables": [
+                { "from": "clock", "output": "beat", "to": "vca", "input": "mod" },
+                { "from": "osc", "output": "saw", "to": "vca", "input": "in" },
+                { "from": "vca", "output": "out", "to": "master", "input": "in" }
+            ]
+        }"#,
+    )
+    .unwrap();
+    instance.load_patch(&patch);
+    // The song at 60 BPM: a beat a second, sounding for its first half.
+    let heard = instance.play_song(&[], Some(60.0), 2.0);
+    let window = |from: f64, to: f64| {
+        let at = |t: f64| (t * SAMPLE_RATE) as usize;
+        loudest(&heard[at(from)..at(to)])
+    };
+    assert!(window(0.05, 0.45) > 0.1, "first half of the first beat");
+    assert!(window(0.55, 0.95) < 0.01, "second half, silent");
+    assert!(window(1.05, 1.45) > 0.1, "the next beat");
 }

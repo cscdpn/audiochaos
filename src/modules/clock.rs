@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use crate::engine::module::{Buffer, Module, ModuleInfo};
 use crate::engine::param::{ParamInfo, Scale};
+use crate::engine::transport::Transport;
 use crate::modules::dsp::{ClockIn, flash};
 
 pub const IN_TAP: usize = 0;
@@ -14,7 +17,7 @@ pub const TEMPO: usize = 0;
 
 pub static INFO: ModuleInfo = ModuleInfo {
     name: "clock",
-    description: "A tempo as gates, to keep delays, LFOs and sequencers in time. Tap it on `tap` or with the Tap button.",
+    description: "A tempo as gates, to keep delays, LFOs and sequencers in time. Tap it on `tap` or with the Tap button. In a DAW, it follows the song's tempo, and its bars while the song plays.",
     inputs: &["tap"],
     outputs: &["bar", "beat", "8th", "dotted 8th", "16th"],
     output_details: &[
@@ -31,7 +34,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
         default: 120.0,
         scale: Scale::Linear,
         unit: "BPM",
-        help: "Beats per minute. Ignored while `tap` has a cable.",
+        help: "Beats per minute. Ignored while `tap` has a cable, and in a DAW, which sets the tempo.",
     }],
 };
 
@@ -80,6 +83,10 @@ impl Tap {
 /// rhythm of its rising edges sets the tempo instead, a MIDI pad making a tap
 /// tempo pedal: the first tap of a new tempo starts a bar, the next ones
 /// pull the nearest beat onto them.
+///
+/// In the plugin, the DAW's tempo overrides both, and while the song plays,
+/// each block starts where the song is, so bars line up with the song's
+/// (assuming four beats to the bar). Stopped, it runs on at the DAW's tempo.
 pub struct Clock {
     sample_rate: f32,
     /// In f64: in f32, adding a sample's worth of beats would lose about a
@@ -92,10 +99,11 @@ pub struct Clock {
     tapped: Option<f32>,
     /// Samples played, to time taps.
     now: u64,
+    transport: Arc<Transport>,
 }
 
 impl Clock {
-    pub fn new(sample_rate: f32) -> Self {
+    pub fn new(sample_rate: f32, transport: Arc<Transport>) -> Self {
         Self {
             sample_rate,
             beats: 0.0,
@@ -104,6 +112,7 @@ impl Clock {
             tap: Tap::default(),
             tapped: None,
             now: 0,
+            transport,
         }
     }
 
@@ -126,11 +135,15 @@ impl Module for Clock {
     }
 
     fn process(&mut self, inputs: &[Buffer], params: &[Buffer], outputs: &mut [Buffer]) {
+        let host_tempo = self.transport.tempo();
+        if let Some(beats) = self.transport.beats() {
+            self.beats = beats.rem_euclid(CYCLE);
+        }
         for (i, &knob) in params[TEMPO].iter().enumerate() {
             if self.edges.tick(inputs[IN_TAP][i]) && self.tap_plugged {
                 self.on_tap();
             }
-            let tempo = self.tapped.unwrap_or(knob);
+            let tempo = host_tempo.unwrap_or_else(|| f64::from(self.tapped.unwrap_or(knob)));
             for (out, period) in outputs.iter_mut().zip(PERIODS) {
                 out[i] = if self.beats % period < period / 2.0 {
                     1.0
@@ -138,7 +151,7 @@ impl Module for Clock {
                     0.0
                 };
             }
-            let step = f64::from(tempo) / 60.0 / f64::from(self.sample_rate);
+            let step = tempo / 60.0 / f64::from(self.sample_rate);
             self.beats = (self.beats + step) % CYCLE;
             self.now += 1;
         }
@@ -181,7 +194,7 @@ mod tests {
             (OUT_SIXTEENTH, 0.25),
         ] {
             let out = run(
-                &mut Clock::new(SR),
+                &mut Clock::new(SR, Arc::default()),
                 &[0.0],
                 &[120.0],
                 port,
@@ -197,9 +210,38 @@ mod tests {
     }
 
     #[test]
+    fn a_daw_tempo_overrides_the_knob() {
+        let transport = Arc::new(Transport::default());
+        transport.set(Some(60.0), None);
+        let mut clock = Clock::new(SR, Arc::clone(&transport));
+        let out = run(&mut clock, &[0.0], &[120.0], OUT_BEAT, 4 * 48_000 / BLOCK);
+        let edges = rising_edges(&out);
+        assert_eq!(edges.len(), 3, "one beat a second, not two");
+        assert!((edges[1] - edges[0]).abs_diff(48_000) <= 1);
+    }
+
+    #[test]
+    fn a_playing_daw_sets_where_the_bar_is() {
+        let transport = Arc::new(Transport::default());
+        let mut clock = Clock::new(SR, Arc::clone(&transport));
+        // Halfway through the first beat of the second bar.
+        transport.set(Some(120.0), Some(4.5));
+        let mut first = |port| run(&mut clock, &[0.0], &[120.0], port, 1)[0];
+        assert_eq!(first(OUT_BEAT), 0.0, "second half of a beat");
+        transport.set(Some(120.0), Some(4.5));
+        assert_eq!(first(OUT_EIGHTH), 1.0, "first half of an eighth");
+        transport.set(Some(120.0), Some(4.5));
+        assert_eq!(first(OUT_BAR), 1.0, "first half of the bar");
+        // The song jumps back to its start: so does the clock.
+        transport.set(Some(120.0), Some(0.0));
+        run(&mut clock, &[0.0], &[120.0], OUT_BEAT, 1);
+        assert!(clock.beats < 0.01, "{}", clock.beats);
+    }
+
+    #[test]
     fn gates_are_high_for_half_their_period() {
         let out = run(
-            &mut Clock::new(SR),
+            &mut Clock::new(SR, Arc::default()),
             &[0.0],
             &[120.0],
             OUT_BEAT,
@@ -211,7 +253,7 @@ mod tests {
 
     #[test]
     fn the_light_flashes_on_each_beat() {
-        let mut clock = Clock::new(SR);
+        let mut clock = Clock::new(SR, Arc::default());
         // Just past a beat, then just before the next one.
         run(&mut clock, &[0.0], &[120.0], OUT_BEAT, 24_000 / BLOCK + 1);
         assert!(clock.led().unwrap() > 0.9);
@@ -275,7 +317,7 @@ mod tests {
 
     #[test]
     fn taps_on_the_tap_input_set_the_tempo_and_the_beat() {
-        let mut clock = Clock::new(SR);
+        let mut clock = Clock::new(SR, Arc::default());
         clock.set_plugged(IN_TAP, true);
         // Taps 0.4 s apart, 150 BPM, starting off the beat.
         let taps = [10_000, 29_200, 48_400, 67_600];
@@ -291,7 +333,7 @@ mod tests {
 
     #[test]
     fn the_first_tap_starts_a_bar() {
-        let mut clock = Clock::new(SR);
+        let mut clock = Clock::new(SR, Arc::default());
         clock.set_plugged(IN_TAP, true);
         // Late in a beat at 60 BPM, when the beat gate is low.
         tapped(&mut clock, &[30_000], 30_000 + BLOCK);
@@ -306,7 +348,7 @@ mod tests {
             let edges = rising_edges(&beat);
             edges[1] - edges[0]
         };
-        let mut clock = Clock::new(SR);
+        let mut clock = Clock::new(SR, Arc::default());
         tapped(&mut clock, &taps, 48_000);
         assert!(beat_period(&mut clock).abs_diff(48_000) <= 1);
 

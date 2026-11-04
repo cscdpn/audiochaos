@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use audiochaos::engine::control::Engine;
 use audiochaos::engine::input::LiveInput;
+use audiochaos::engine::transport::Transport;
 use audiochaos::gui::Editor;
 use audiochaos::midi::{self, Parser};
 use audiochaos::modules::Context;
@@ -40,6 +41,8 @@ pub struct Audiochaos {
     midi: Arc<midi::State>,
     parser: Parser,
     input: Arc<LiveInput>,
+    /// The host's tempo and position, for `clock` modules.
+    transport: Arc<Transport>,
     /// Whether the host feeds audio in, as the layout it picked says.
     has_input: bool,
     /// The knob values last passed on, to pass on changes only and leave
@@ -107,10 +110,12 @@ impl Default for Audiochaos {
     fn default() -> Self {
         let midi = Arc::new(midi::State::default());
         let input = Arc::new(LiveInput::default());
+        let transport = Arc::new(Transport::default());
         let context = Context {
             sample_rate: DEFAULT_SAMPLE_RATE,
             midi: Arc::clone(&midi),
             input: Arc::clone(&input),
+            transport: Arc::clone(&transport),
         };
         let patch = presets::get(FIRST_PRESET).expect("the first preset exists");
         let (graph, output) = patch.build(&context).expect("presets build");
@@ -133,6 +138,7 @@ impl Default for Audiochaos {
             midi,
             parser: Parser::default(),
             input,
+            transport,
             has_input: false,
             knobs: [f32::NAN; midi::KNOBS],
         }
@@ -152,6 +158,7 @@ impl Audiochaos {
             sample_rate,
             midi: Arc::clone(&self.midi),
             input: Arc::clone(&self.input),
+            transport: Arc::clone(&self.transport),
         };
         let (graph, output) = patch
             .build(&context)
@@ -242,8 +249,18 @@ impl Plugin for Audiochaos {
         context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         self.follow_knobs();
+        let transport = context.transport();
+        let tempo = transport.tempo;
+        // Where the song is, while it plays.
+        let start = transport.playing.then(|| transport.pos_beats()).flatten();
+        let beats_per_frame = tempo.map(|t| t / 60.0 / f64::from(self.sample_rate));
         let mut next_event = context.next_event();
         for (frame, mut samples) in buffer.iter_samples().enumerate() {
+            let beats = start
+                .zip(beats_per_frame)
+                .map(|(start, step)| start + frame as f64 * step);
+            // Before the frame, as the frame may start a block.
+            self.transport.set(tempo, beats);
             while let Some(event) = next_event
                 && event.timing() as usize <= frame
             {

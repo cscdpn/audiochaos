@@ -33,6 +33,7 @@ use std::sync::Arc;
 
 use crate::engine::input::LiveInput;
 use crate::engine::module::{Module, ModuleInfo};
+use crate::engine::transport::Transport;
 use crate::midi::State;
 
 /// What building a module takes besides its kind.
@@ -43,6 +44,9 @@ pub struct Context {
     pub midi: Arc<State>,
     /// What the sound card's inputs play; `input` modules read it.
     pub input: Arc<LiveInput>,
+    /// The DAW's tempo and position, in the plugin; `clock` modules follow
+    /// it.
+    pub transport: Arc<Transport>,
 }
 
 impl Context {
@@ -52,6 +56,7 @@ impl Context {
             sample_rate,
             midi: Arc::default(),
             input: Arc::default(),
+            transport: Arc::default(),
         }
     }
 }
@@ -94,7 +99,7 @@ pub fn build(kind: &str, context: &Context, seed: u32) -> Option<Box<dyn Module>
         "input" => Box::new(input::Input::new(Arc::clone(&context.input))),
         "midi" => Box::new(midi::Midi::new(Arc::clone(&context.midi), sr)),
         "poly" => Box::new(poly::Poly::new(Arc::clone(&context.midi), sr)),
-        "clock" => Box::new(clock::Clock::new(sr)),
+        "clock" => Box::new(clock::Clock::new(sr, Arc::clone(&context.transport))),
         "seq" => Box::new(sequencer::Sequencer::new(sr)),
         "lfo" => Box::new(lfo::Lfo::new(sr)),
         "adsr" => Box::new(adsr::Adsr::new(sr)),
