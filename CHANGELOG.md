@@ -11,14 +11,17 @@ wrong.
 The first release.
 
 ### Sound
-- 26 modules: sources (`osc`, `noise`, `lfo`, `seq`, `clock`, `adsr`,
+- 27 modules: sources (`osc`, `noise`, `lfo`, `seq`, `clock`, `adsr`,
   `sampler`, `looper`, `input`, `midi`, `poly`), processors (`filter`,
   `dist`, `crush`, `delay`, `chorus`, `flanger`, `phaser`, `univibe`, `vca`,
-  `mix`), control (`s&h`, `atten`, `invert`, `logic`) and the `master`.
+  `mix`), control (`s&h`, `atten`, `invert`, `logic`), the `song`
+  arranger and the `master`.
 - Every knob has a CV input; cables may feed back, with one block (64
   samples) of delay.
-- Six presets: `chaos`, `bass`, `groovygroove`, `keys`, `chords`, `looper`.
+- Seven presets: `chaos`, `bass`, `groovygroove`, `keys`, `chords`, `looper`,
+  and `song`, a whole short piece in sections.
 - Patches as JSON files, block positions included; version 1 files load.
+  Up to 256 modules and 1024 cables in a patch.
 
 ### Playing
 - MIDI controllers: keys, pitch bend, pads and eight knobs, mapped on an

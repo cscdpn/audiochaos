@@ -17,7 +17,8 @@ starts on a plain sequenced bassline instead, a calm base to patch from, and
 MIDI controller (see [MIDI controllers](#midi-controllers)), and `just run
 chords` too, four notes at once (see [Chords](#chords)). `just run looper`
 records the sound card's input and loops it (see [Audio input and
-looper](#audio-input-and-looper)).
+looper](#audio-input-and-looper)). `just run song` plays a whole short piece,
+instruments coming in and out over seven sections (see [Songs](#songs)).
 
 ### Graphical editor
 
@@ -295,8 +296,8 @@ modules, knobs and ports referred to by name:
 ```
 
 Modules are processed in the order listed, and a patch needs exactly one
-`master`; it holds up to 256 modules and 1024 cables. Knobs left out are at their default, so a patch always fully
-determines the sound. A sampler's sound is a `"file"` entry next to its `"type"`,
+`master`; it holds up to 256 modules and 1024 cables. Knobs left out are at
+their default, so a patch always fully determines the sound. A sampler's sound is a `"file"` entry next to its `"type"`,
 a path that is relative to the directory the program runs in unless absolute
 (the editor saves absolute ones), so moving a sound breaks the patches using it:
 the patch still loads, that sampler stays silent, its button turns red and the
@@ -318,6 +319,7 @@ Module types, as patches and the editor's palette name them:
 | poly | the keyboard as four voices, for chords |
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs, started and stopped by `run` |
+| song | arranger: up to eight sections, each so many bars long, with a gate per section |
 | lfo | slow sine, triangle, saw and square |
 | adsr | envelope from a gate: attack, decay, sustain, release |
 | noise | white noise |
@@ -386,7 +388,7 @@ gives one tempo to all of them: for echoes on the dotted eighth over a
 sequence in eighths, patch its `dotted 8th` into the delay's `clock` and its
 `8th` into the sequencer's.
 
-In the DAW plugin, the song's tempo replaces the `tempo` knob and the
+In the DAW plugin, the DAW's tempo replaces the `tempo` knob and the
 tapped tempo, and while the song plays, the clock jumps to where the song
 is at every block (see [DAW plugin](#daw-plugin)).
 
@@ -398,6 +400,37 @@ replaces the `tempo` knob, and unplugging it hands the tempo back to the
 knob. Without a pad, click the **Tap** button in rhythm: it sets the knob,
 and is greyed out while `tap` has a cable. A pad straight into a delay's
 `clock` works too: the delay takes the time between the last two hits.
+
+### Songs
+
+A `song` block arranges a whole piece in one patch, so a patch file can be
+a complete track. It plays up to eight sections one after the other, each
+lasting its `length` knob in bars (0 skips it), and each `section` output is
+a gate that stays high while its section plays. Patch a clock's `bar` into
+its `clock`: each tick is a bar, and the first tick starts the first
+section.
+
+To bring an instrument in and out, patch the gates of the sections it plays
+in into its sequencer's `run cv`, with `run` at 0: the sequencer plays from
+its first step when one of its sections starts and falls silent outside
+them. Several cables into one input add up, and only one section plays at a
+time, so the cables from sections 2, 3 and 5 make a gate that is high in any
+of the three. A gate into a VCA's `mod`, with `gain` at 0, mutes a sound
+that has no sequencer, a drone or an effect's return.
+
+After its last section, the song ends and every gate closes; with `loop` up
+past halfway, it starts over instead. Lengths can change while it plays:
+the song is a count of bars from its start, so setting the first sections
+to 0 jumps to a later one, which helps when working on the end of a piece.
+Plugging its `clock` again starts it over.
+
+`just run song` plays the `song` preset: hats, then a kick, a bassline and
+an arpeggio coming in and out over seven sections, about a minute at 124
+BPM. `just run --render song.wav --seconds 70 song` writes it to a file.
+
+In the DAW plugin, while the DAW plays, the song is where the DAW's song is,
+counting four beats to the bar, so it follows when you move the playhead.
+To arrange in the DAW itself instead, run one instance per instrument.
 
 ## How it works
 

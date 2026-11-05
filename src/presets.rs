@@ -3,13 +3,14 @@
 use crate::patch::Patch;
 
 /// In the same JSON format as saved patches. The first one is the default.
-const PRESETS: [(&str, &str); 6] = [
+const PRESETS: [(&str, &str); 7] = [
     ("chaos", include_str!("../presets/chaos.json")),
     ("bass", include_str!("../presets/bass.json")),
     ("groovygroove", include_str!("../presets/groovygroove.json")),
     ("keys", include_str!("../presets/keys.json")),
     ("chords", include_str!("../presets/chords.json")),
     ("looper", include_str!("../presets/looper.json")),
+    ("song", include_str!("../presets/song.json")),
 ];
 
 pub fn names() -> impl Iterator<Item = &'static str> {
@@ -168,6 +169,51 @@ mod tests {
         assert!(rms(&looped) > 0.05, "{}", rms(&looped));
         let pitch = rising_zero_crossings(&looped[..SR as usize]);
         assert!(pitch.abs_diff(440) < 15, "{pitch} Hz");
+    }
+
+    #[test]
+    fn song_brings_each_instrument_in_and_out_by_section_then_ends() {
+        use crate::engine::module::BLOCK;
+        use crate::modules::vca;
+
+        let (mut g, _) = get("song").unwrap().build(&Context::new(SR)).unwrap();
+        let names = ["hat vca", "kick vca", "bass vca", "lead vca"];
+        let instruments = names.map(|name| g.nodes().find(|&n| g.name(n) == name).unwrap());
+        // Each section's length in bars and its instruments, then the end.
+        let sections = [
+            (2, [true, false, false, false]),
+            (4, [true, true, false, false]),
+            (4, [true, true, true, false]),
+            (8, [true, true, true, true]),
+            (4, [true, false, false, true]),
+            (8, [true, true, true, true]),
+            (4, [false, true, true, false]),
+            (2, [false; 4]),
+        ];
+        let bars: Vec<[bool; 4]> = sections
+            .iter()
+            .flat_map(|&(length, playing)| std::iter::repeat_n(playing, length))
+            .collect();
+        // At 124 BPM, four beats to the bar.
+        let bar = 4.0 * 60.0 / 124.0 * SR;
+        let mut energy = vec![[0.0_f32; 4]; bars.len()];
+        for b in 0..(bars.len() as f32 * bar) as usize / BLOCK {
+            g.process();
+            let t = (b * BLOCK) as f32 / bar;
+            // The middle of each bar, clear of the notes fading from the last.
+            if !(0.25..0.75).contains(&t.fract()) {
+                continue;
+            }
+            for (e, &id) in energy[t as usize].iter_mut().zip(&instruments) {
+                *e += g.output(id, vca::OUT).iter().map(|s| s * s).sum::<f32>();
+            }
+        }
+        for (n, (energy, playing)) in energy.iter().zip(&bars).enumerate() {
+            for k in 0..names.len() {
+                let heard = energy[k] > 1e-3;
+                assert_eq!(heard, playing[k], "bar {n}, {}: {}", names[k], energy[k]);
+            }
+        }
     }
 
     #[test]

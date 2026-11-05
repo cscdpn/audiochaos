@@ -26,6 +26,7 @@ pub mod poly;
 pub mod sample_hold;
 pub mod sampler;
 pub mod sequencer;
+pub mod song;
 pub mod univibe;
 pub mod vca;
 
@@ -70,7 +71,7 @@ pub struct Kind {
 
 /// Every kind of module, in the editor's palette order. Adding a module is
 /// adding it here.
-pub const KINDS: [Kind; 26] = [
+pub const KINDS: [Kind; 27] = [
     Kind {
         info: &input::INFO,
         build: |c, _| Box::new(input::Input::new(Arc::clone(&c.input))),
@@ -90,6 +91,10 @@ pub const KINDS: [Kind; 26] = [
     Kind {
         info: &sequencer::INFO,
         build: |c, _| Box::new(sequencer::Sequencer::new(c.sample_rate)),
+    },
+    Kind {
+        info: &song::INFO,
+        build: |c, _| Box::new(song::Song::new(Arc::clone(&c.transport))),
     },
     Kind {
         info: &lfo::INFO,

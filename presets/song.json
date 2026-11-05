@@ -1,0 +1,610 @@
+{
+  "version": 2,
+  "description": "A whole short piece arranged by `song`: hats, then a kick, a bassline and an arpeggio coming in and out over seven sections, a minute at 124 BPM. It ends after the last section: turn the song's `loop` up to hear it again and again.",
+  "modules": [
+    {
+      "name": "clock",
+      "type": "clock"
+    },
+    {
+      "name": "song",
+      "type": "song"
+    },
+    {
+      "name": "kick",
+      "type": "seq"
+    },
+    {
+      "name": "hats",
+      "type": "seq"
+    },
+    {
+      "name": "bass",
+      "type": "seq"
+    },
+    {
+      "name": "lead",
+      "type": "seq"
+    },
+    {
+      "name": "kick env",
+      "type": "adsr"
+    },
+    {
+      "name": "hat env",
+      "type": "adsr"
+    },
+    {
+      "name": "bass env",
+      "type": "adsr"
+    },
+    {
+      "name": "lead env",
+      "type": "adsr"
+    },
+    {
+      "name": "kick osc",
+      "type": "osc"
+    },
+    {
+      "name": "noise",
+      "type": "noise"
+    },
+    {
+      "name": "bass osc",
+      "type": "osc"
+    },
+    {
+      "name": "lead osc",
+      "type": "osc"
+    },
+    {
+      "name": "hat filter",
+      "type": "filter"
+    },
+    {
+      "name": "bass filter",
+      "type": "filter"
+    },
+    {
+      "name": "kick vca",
+      "type": "vca"
+    },
+    {
+      "name": "hat vca",
+      "type": "vca"
+    },
+    {
+      "name": "bass vca",
+      "type": "vca"
+    },
+    {
+      "name": "lead vca",
+      "type": "vca"
+    },
+    {
+      "name": "lead delay",
+      "type": "delay"
+    },
+    {
+      "name": "mix",
+      "type": "mix"
+    },
+    {
+      "name": "master",
+      "type": "master"
+    }
+  ],
+  "knobs": {
+    "bass": {
+      "rate": 4.0,
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.07526,
+      "step 4": 0.0,
+      "step 5": 0.01881,
+      "step 6": 0.0,
+      "step 7": 0.0439,
+      "step 8": 0.03136
+    },
+    "bass env": {
+      "attack": 0.003,
+      "decay": 0.12,
+      "release": 0.05,
+      "sustain": 0.3
+    },
+    "bass filter": {
+      "cutoff": 500.0,
+      "resonance": 0.6
+    },
+    "bass osc": {
+      "fm depth": 100.0,
+      "freq": 55.0
+    },
+    "bass vca": {
+      "gain": 0.0
+    },
+    "clock": {
+      "tempo": 124.0
+    },
+    "hat env": {
+      "attack": 0.001,
+      "decay": 0.04,
+      "release": 0.03,
+      "sustain": 0.0
+    },
+    "hat filter": {
+      "cutoff": 7000.0,
+      "resonance": 0.3
+    },
+    "hat vca": {
+      "gain": 0.0
+    },
+    "hats": {
+      "rate": 4.0,
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.0,
+      "step 4": 0.0,
+      "step 5": 0.0,
+      "step 6": 0.0,
+      "step 7": 0.0,
+      "step 8": 0.0
+    },
+    "kick": {
+      "rate": 4.0,
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.0,
+      "step 4": 0.0,
+      "step 5": 0.0,
+      "step 6": 0.0,
+      "step 7": 0.0,
+      "step 8": 0.0
+    },
+    "kick env": {
+      "attack": 0.001,
+      "decay": 0.18,
+      "release": 0.1,
+      "sustain": 0.0
+    },
+    "kick osc": {
+      "fm depth": 120.0,
+      "freq": 45.0
+    },
+    "kick vca": {
+      "gain": 0.0
+    },
+    "lead": {
+      "rate": 4.0,
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 0.01881,
+      "step 3": 0.0439,
+      "step 4": 0.07526,
+      "step 5": 0.06271,
+      "step 6": 0.0439,
+      "step 7": 0.01881,
+      "step 8": 0.0439
+    },
+    "lead delay": {
+      "feedback": 0.45,
+      "mix": 0.35,
+      "time": 0.25
+    },
+    "lead env": {
+      "attack": 0.005,
+      "decay": 0.2,
+      "release": 0.15,
+      "sustain": 0.2
+    },
+    "lead osc": {
+      "fm depth": 100.0,
+      "freq": 220.0
+    },
+    "lead vca": {
+      "gain": 0.0
+    },
+    "master": {
+      "volume": 0.6
+    },
+    "mix": {
+      "level 1": 1.0,
+      "level 2": 0.35,
+      "level 3": 0.7,
+      "level 4": 0.35
+    },
+    "song": {
+      "length 1": 2.0,
+      "length 2": 4.0,
+      "length 3": 4.0,
+      "length 4": 8.0,
+      "length 5": 4.0,
+      "length 6": 8.0,
+      "length 7": 4.0,
+      "length 8": 0.0,
+      "loop": 0.0
+    }
+  },
+  "cables": [
+    {
+      "from": "clock",
+      "output": "bar",
+      "to": "song",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "beat",
+      "to": "kick",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "16th",
+      "to": "hats",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "bass",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "lead",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "dotted 8th",
+      "to": "lead delay",
+      "input": "clock"
+    },
+    {
+      "from": "song",
+      "output": "section 1",
+      "to": "hats",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 2",
+      "to": "hats",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "hats",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 4",
+      "to": "hats",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "hats",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 6",
+      "to": "hats",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 2",
+      "to": "kick",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "kick",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 4",
+      "to": "kick",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 6",
+      "to": "kick",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 7",
+      "to": "kick",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "bass",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 4",
+      "to": "bass",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 6",
+      "to": "bass",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 7",
+      "to": "bass",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 4",
+      "to": "lead",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "lead",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 6",
+      "to": "lead",
+      "input": "run cv"
+    },
+    {
+      "from": "kick",
+      "output": "gate",
+      "to": "kick env",
+      "input": "gate"
+    },
+    {
+      "from": "hats",
+      "output": "gate",
+      "to": "hat env",
+      "input": "gate"
+    },
+    {
+      "from": "bass",
+      "output": "gate",
+      "to": "bass env",
+      "input": "gate"
+    },
+    {
+      "from": "lead",
+      "output": "gate",
+      "to": "lead env",
+      "input": "gate"
+    },
+    {
+      "from": "kick env",
+      "output": "env",
+      "to": "kick osc",
+      "input": "fm"
+    },
+    {
+      "from": "kick osc",
+      "output": "sine",
+      "to": "kick vca",
+      "input": "in"
+    },
+    {
+      "from": "kick env",
+      "output": "env",
+      "to": "kick vca",
+      "input": "mod"
+    },
+    {
+      "from": "noise",
+      "output": "white",
+      "to": "hat filter",
+      "input": "in"
+    },
+    {
+      "from": "hat filter",
+      "output": "highpass",
+      "to": "hat vca",
+      "input": "in"
+    },
+    {
+      "from": "hat env",
+      "output": "env",
+      "to": "hat vca",
+      "input": "mod"
+    },
+    {
+      "from": "bass",
+      "output": "cv",
+      "to": "bass osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "bass osc",
+      "output": "saw",
+      "to": "bass filter",
+      "input": "in"
+    },
+    {
+      "from": "bass filter",
+      "output": "lowpass",
+      "to": "bass vca",
+      "input": "in"
+    },
+    {
+      "from": "bass env",
+      "output": "env",
+      "to": "bass vca",
+      "input": "mod"
+    },
+    {
+      "from": "lead",
+      "output": "cv",
+      "to": "lead osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "lead osc",
+      "output": "square",
+      "to": "lead vca",
+      "input": "in"
+    },
+    {
+      "from": "lead env",
+      "output": "env",
+      "to": "lead vca",
+      "input": "mod"
+    },
+    {
+      "from": "lead vca",
+      "output": "out",
+      "to": "lead delay",
+      "input": "in"
+    },
+    {
+      "from": "kick vca",
+      "output": "out",
+      "to": "mix",
+      "input": "1"
+    },
+    {
+      "from": "hat vca",
+      "output": "out",
+      "to": "mix",
+      "input": "2"
+    },
+    {
+      "from": "bass vca",
+      "output": "out",
+      "to": "mix",
+      "input": "3"
+    },
+    {
+      "from": "lead delay",
+      "output": "out",
+      "to": "mix",
+      "input": "4"
+    },
+    {
+      "from": "mix",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    }
+  ],
+  "positions": {
+    "bass": [
+      575.75,
+      296.0
+    ],
+    "bass env": [
+      1035.7188,
+      352.0
+    ],
+    "bass filter": [
+      1529.9375,
+      420.0
+    ],
+    "bass osc": [
+      1529.9375,
+      0.0
+    ],
+    "bass vca": [
+      2057.5312,
+      0.0
+    ],
+    "clock": [
+      0.0,
+      0.0
+    ],
+    "hat env": [
+      1035.7188,
+      176.0
+    ],
+    "hat filter": [
+      1529.9375,
+      280.0
+    ],
+    "hat vca": [
+      1529.9375,
+      700.0
+    ],
+    "hats": [
+      575.75,
+      0.0
+    ],
+    "kick": [
+      0.0,
+      451.0
+    ],
+    "kick env": [
+      1035.7188,
+      0.0
+    ],
+    "kick osc": [
+      1035.7188,
+      704.0
+    ],
+    "kick vca": [
+      1529.9375,
+      560.0
+    ],
+    "lead": [
+      575.75,
+      592.0
+    ],
+    "lead delay": [
+      2057.5312,
+      280.0
+    ],
+    "lead env": [
+      1035.7188,
+      528.0
+    ],
+    "lead osc": [
+      1529.9375,
+      140.0
+    ],
+    "lead vca": [
+      2057.5312,
+      140.0
+    ],
+    "master": [
+      2057.5312,
+      686.0
+    ],
+    "mix": [
+      2057.5312,
+      456.0
+    ],
+    "noise": [
+      1035.7188,
+      844.0
+    ],
+    "song": [
+      0.0,
+      176.0
+    ]
+  }
+}
