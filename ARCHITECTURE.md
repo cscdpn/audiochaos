@@ -32,8 +32,10 @@ src/
   main.rs        command line
 plugin/          VST3 and CLAP instrument, on nice-plug
 xtask/           `cargo xtask bundle`, nice-plug's plugin bundler
-tests/           stability.rs (fuzzed patches), realtime.rs (no allocation)
+tests/           stability.rs (fuzzed patches), realtime.rs (no allocation),
+                 skill.rs (the skill below stays true to the modules)
 presets/         built-in patches
+skills/          audiochaos-song: how a language model writes a song patch
 ```
 
 Cargo features follow the layers: the core (`engine`, `modules`, `midi`,

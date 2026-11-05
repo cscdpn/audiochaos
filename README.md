@@ -433,6 +433,14 @@ In the DAW plugin, while the DAW plays, the song is where the DAW's song is,
 counting four beats to the bar, so it follows when you move the playhead.
 To arrange in the DAW itself instead, run one instance per instrument.
 
+To have a language model write songs, give it the folder
+`skills/audiochaos-song`: `SKILL.md` explains the method and the patch
+format with instrument templates and a table of notes, `reference.md` lists
+every module's exact port and knob names (generated from the code), and
+`example.json` is a song in four sections. It fits in the context of a
+small local model, around 8,000 tokens in all, and needs nothing else from
+this repository.
+
 ## How it works
 
 The engine, its threads, and the reasons behind its design are in

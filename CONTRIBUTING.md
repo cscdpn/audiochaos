@@ -52,6 +52,10 @@ when touching code the plugin uses, since it builds the library without the
 2. Declare it in `src/modules/mod.rs` and add a `Kind` to `KINDS`, where it
    should appear in the editor's palette.
 3. Add it to the Modules table of the README.
+4. Regenerate the module list of the song-writing skill:
+   `UPDATE_SKILL=1 cargo test --test skill` (`tests/skill.rs` fails until
+   then). If a song can use it, its templates in
+   `skills/audiochaos-song/SKILL.md` may deserve a line.
 
 The registry's tests then check its descriptions, that its knobs fit
 (`MAX_PARAMS`), and `tests/stability.rs` feeds it chaotic signals.

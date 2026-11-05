@@ -22,6 +22,8 @@ The first release.
   and `song`, a whole short piece in sections.
 - Patches as JSON files, block positions included; version 1 files load.
   Up to 256 modules and 1024 cables in a patch.
+- A skill in `skills/audiochaos-song` to have a language model, even a
+  small local one, write a song patch without reading the code.
 
 ### Playing
 - MIDI controllers: keys, pitch bend, pads and eight knobs, mapped on an
