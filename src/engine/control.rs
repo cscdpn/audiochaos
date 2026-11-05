@@ -11,11 +11,18 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use super::graph::{
-    Cable, CableSet, Graph, GraphError, MAX_MODULES, MAX_PARAMS, Node, NodeId, free_slot,
+    Cable, CableSet, Graph, GraphError, MAX_CABLES, MAX_MODULES, MAX_PARAMS, Node, NodeId,
+    free_slot,
 };
 use super::input::{CHANNELS, Feed, LiveInput};
 use super::module::{BLOCK, Module, ModuleInfo};
 use super::sample::Sample;
+
+/// Room for a whole patch's commands at once, as pasting one into the editor
+/// sends them, faster than the audio thread takes them: each module with its
+/// sound file and every knob, every cable, and each module removed again if
+/// a mistake undoes the paste.
+pub const COMMAND_QUEUE_CAPACITY: usize = MAX_MODULES * (MAX_PARAMS + 3) + MAX_CABLES;
 
 /// How long the sound takes to fade in or out when the engine starts or
 /// stops: long enough to avoid a click, short enough to feel instant.

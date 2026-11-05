@@ -10,16 +10,12 @@ use cpal::traits::DeviceTrait;
 use cpal::{BufferSize, StreamConfig};
 
 use crate::engine::audio::{self, Playback};
-use crate::engine::control::{Controller, Engine};
+use crate::engine::control::{COMMAND_QUEUE_CAPACITY, Controller, Engine};
 use crate::engine::input::LiveInput;
 use crate::engine::record::{self, Recorder};
 use crate::midi;
 use crate::modules::Context;
 use crate::patch::{self, Patch};
-
-/// Room for a burst of key presses, or a whole patch being loaded, even if
-/// the audio thread stalls briefly.
-const COMMAND_QUEUE_CAPACITY: usize = 1024;
 
 /// Which sound cards to use, by `audio::DeviceEntry` id; `None` for the
 /// system's default.

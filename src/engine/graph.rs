@@ -9,10 +9,10 @@ use super::sample::Sample;
 
 /// Cables are stored in a vector allocated once with this capacity, so that
 /// connecting from the audio thread never allocates.
-pub const MAX_CABLES: usize = 256;
+pub const MAX_CABLES: usize = 1024;
 
 /// Modules live in this many slots, allocated once for the same reason.
-pub const MAX_MODULES: usize = 64;
+pub const MAX_MODULES: usize = 256;
 
 /// The most knobs a module has (the sequencer's rate, eight steps and run), so
 /// the UI can be shown every knob's modulated value in a fixed-size table.
@@ -24,7 +24,7 @@ pub const MAX_PARAMS: usize = 10;
 /// state forever; with the rails every module only ever sees finite input.
 pub const RAIL: f32 = 10.0;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeId(pub(crate) usize);
 
 /// `to_port` counts signal inputs first, then one CV input per parameter
@@ -58,11 +58,21 @@ impl Error for GraphError {}
 
 /// The set of cables, with the rules shared by the graph (audio side) and its
 /// mirror in the controller (UI side), so both always agree.
-pub struct CableSet(Vec<Cable>);
+pub struct CableSet {
+    /// As added, which is how patches list them when saved.
+    added: Vec<Cable>,
+    /// The same cables sorted by the module they go to, so computing a
+    /// module finds its own without going through all of them: that took a
+    /// quarter of a block with a thousand cables.
+    by_destination: Vec<Cable>,
+}
 
 impl CableSet {
     pub fn new() -> Self {
-        Self(Vec::with_capacity(MAX_CABLES))
+        Self {
+            added: Vec::with_capacity(MAX_CABLES),
+            by_destination: Vec::with_capacity(MAX_CABLES),
+        }
     }
 
     pub fn insert(
@@ -73,21 +83,25 @@ impl CableSet {
     ) -> Result<(), GraphError> {
         if cable.from_port >= from.outputs.len() || cable.to_port >= to.num_input_ports() {
             Err(GraphError::NoSuchPort)
-        } else if self.0.contains(&cable) {
+        } else if self.contains(cable) {
             Err(GraphError::AlreadyConnected)
-        } else if self.0.len() == MAX_CABLES {
+        } else if self.added.len() == MAX_CABLES {
             Err(GraphError::TooManyCables)
         } else {
-            self.0.push(cable);
+            // Both within their capacity, so neither allocates.
+            self.added.push(cable);
+            let i = self.by_destination.partition_point(|c| c.to <= cable.to);
+            self.by_destination.insert(i, cable);
             Ok(())
         }
     }
 
     /// Returns whether the cable was there.
     pub fn remove(&mut self, cable: Cable) -> bool {
-        match self.0.iter().position(|&c| c == cable) {
+        match self.added.iter().position(|&c| c == cable) {
             Some(i) => {
-                self.0.swap_remove(i);
+                self.added.swap_remove(i);
+                self.by_destination.retain(|&c| c != cable);
                 true
             }
             None => false,
@@ -96,15 +110,24 @@ impl CableSet {
 
     /// Removes every cable from or to `node`.
     pub fn remove_node(&mut self, node: NodeId) {
-        self.0.retain(|c| c.from != node && c.to != node);
+        let kept = |c: &Cable| c.from != node && c.to != node;
+        self.added.retain(kept);
+        self.by_destination.retain(kept);
+    }
+
+    /// The cables into `node`.
+    pub fn to(&self, node: NodeId) -> &[Cable] {
+        let start = self.by_destination.partition_point(|c| c.to < node);
+        let end = self.by_destination.partition_point(|c| c.to <= node);
+        &self.by_destination[start..end]
     }
 
     pub fn contains(&self, cable: Cable) -> bool {
-        self.0.contains(&cable)
+        self.added.contains(&cable)
     }
 
     pub fn as_slice(&self) -> &[Cable] {
-        &self.0
+        &self.added
     }
 }
 
@@ -335,7 +358,7 @@ impl Graph {
             for input in &mut node.inputs {
                 input.fill(0.0);
             }
-            for cable in self.cables.as_slice().iter().filter(|c| c.to == id) {
+            for cable in self.cables.to(id) {
                 // A module's own output is still in `node`, out of its slot.
                 let source = match &self.slots[cable.from.0] {
                     Some(from) => from.outputs[cable.from_port],
@@ -717,6 +740,32 @@ mod tests {
         }
         assert!(g.is_full());
         assert_eq!(free_slot(g.nodes()), None);
+    }
+
+    #[test]
+    fn cables_are_found_by_where_they_go_and_listed_as_added() {
+        let mut set = CableSet::new();
+        let (a, b, c) = (NodeId(0), NodeId(1), NodeId(2));
+        let added = [
+            cable(a, c),
+            cable(b, a),
+            cable(c, c),
+            cable(a, b),
+            cable(b, c),
+        ];
+        for &one in &added {
+            set.insert(one, &OFFSET, &OFFSET).unwrap();
+        }
+        assert_eq!(set.as_slice(), added);
+        assert_eq!(set.to(a), [cable(b, a)]);
+        assert_eq!(set.to(c), [cable(a, c), cable(c, c), cable(b, c)]);
+
+        set.remove(cable(c, c));
+        assert_eq!(set.to(c), [cable(a, c), cable(b, c)]);
+        set.remove_node(b);
+        assert_eq!(set.to(a), []);
+        assert_eq!(set.to(c), [cable(a, c)]);
+        assert_eq!(set.as_slice(), [cable(a, c)]);
     }
 
     #[test]

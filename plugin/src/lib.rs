@@ -6,7 +6,7 @@ mod gui;
 
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use audiochaos::engine::control::Engine;
+use audiochaos::engine::control::{COMMAND_QUEUE_CAPACITY, Engine};
 use audiochaos::engine::input::LiveInput;
 use audiochaos::engine::transport::Transport;
 use audiochaos::gui::Editor;
@@ -19,9 +19,6 @@ use nice_plug::params::persist::PersistentField;
 use nice_plug::prelude::*;
 use nice_plug_egui::EguiEditorState;
 
-/// Room for a burst of edits, or a whole patch being loaded, even while the
-/// host is not processing: commands wait in the queue until it does.
-const COMMAND_QUEUE_CAPACITY: usize = 1024;
 /// The rate the patch is built at until the host says which it runs at.
 const DEFAULT_SAMPLE_RATE: f32 = 48_000.0;
 /// What a new instance plays: one played from the keyboard, rather than the

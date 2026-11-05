@@ -65,7 +65,7 @@ up. Everything else follows from it:
 - Adding a module builds it on the UI thread, buffers included, and moves it
   to the audio thread whole; a removed module travels back through a second
   queue to be freed on the UI thread. Modules sit in a fixed number of
-  preallocated slots (64), cables in a fixed-capacity set, so neither side
+  preallocated slots (256), cables in a fixed-capacity set (1024), so neither side
   ever reallocates. Loading a patch swaps in a whole new graph in one go.
 - A sound file is read on the UI thread and moved to the audio thread whole;
   the one it replaces comes back the same way as a removed module.

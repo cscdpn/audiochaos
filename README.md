@@ -295,7 +295,7 @@ modules, knobs and ports referred to by name:
 ```
 
 Modules are processed in the order listed, and a patch needs exactly one
-`master`. Knobs left out are at their default, so a patch always fully
+`master`; it holds up to 256 modules and 1024 cables. Knobs left out are at their default, so a patch always fully
 determines the sound. A sampler's sound is a `"file"` entry next to its `"type"`,
 a path that is relative to the directory the program runs in unless absolute
 (the editor saves absolute ones), so moving a sound breaks the patches using it:

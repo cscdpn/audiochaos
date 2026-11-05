@@ -598,10 +598,12 @@ fn controller_modules(controller: &Controller) -> Vec<(NodeId, &str, &'static Mo
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::control::Engine;
+    use crate::engine::control::{COMMAND_QUEUE_CAPACITY, Engine};
+    use crate::engine::graph::{MAX_CABLES, MAX_PARAMS};
     use crate::modules::{
         master::{self, Master},
         oscillator::{self, Oscillator},
+        sequencer,
     };
 
     const SR: f32 = 48_000.0;
@@ -814,6 +816,42 @@ mod tests {
     }
 
     #[test]
+    fn a_patch_as_large_as_the_engine_takes_pastes_in_one_go() {
+        // The audio thread takes no command meanwhile, as when a paste
+        // happens between two blocks.
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), COMMAND_QUEUE_CAPACITY);
+        let mut big = patch(r#"{ "version": 2 }"#);
+        let count = MAX_MODULES - controller.nodes().len();
+        let name = |i: usize| format!("seq {i}");
+        for i in 0..count {
+            big.modules.push(PatchModule {
+                name: name(i),
+                kind: sequencer::INFO.name.into(),
+                file: None,
+            });
+            let knobs = sequencer::INFO.params.iter();
+            big.knobs
+                .insert(name(i), knobs.map(|p| (p.name.into(), p.default)).collect());
+        }
+        let per_module = MAX_CABLES / count;
+        for i in 0..count {
+            for param in &sequencer::INFO.params[..per_module] {
+                big.cables.push(PatchCable {
+                    from: name(i),
+                    output: sequencer::INFO.outputs[0].into(),
+                    to: name((i + 1) % count),
+                    input: format!("{} cv", param.name),
+                });
+            }
+        }
+        assert_eq!(sequencer::INFO.params.len(), MAX_PARAMS, "every knob set");
+
+        big.insert_into(&mut controller, &Context::new(SR)).unwrap();
+        assert_eq!(controller.nodes().len(), MAX_MODULES);
+        assert_eq!(controller.cables().len(), per_module * count);
+    }
+
+    #[test]
     fn copies_are_numbered_after_their_base_name() {
         assert_eq!(base_name("osc 2"), "osc");
         assert_eq!(base_name("kick env"), "kick env");
@@ -984,7 +1022,7 @@ mod tests {
             .collect();
         assert_eq!(
             error(&modules(&many.join(","))),
-            "too many modules (max 64)"
+            "too many modules (max 256)"
         );
     }
 
