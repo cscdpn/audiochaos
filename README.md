@@ -297,14 +297,18 @@ modules, knobs and ports referred to by name:
 
 Modules are processed in the order listed, and a patch needs exactly one
 `master`; it holds up to 256 modules and 1024 cables. Knobs left out are at
-their default, so a patch always fully determines the sound. A sampler's sound is a `"file"` entry next to its `"type"`,
-a path that is relative to the directory the program runs in unless absolute
-(the editor saves absolute ones), so moving a sound breaks the patches using it:
-the patch still loads, that sampler stays silent, its button turns red and the
-path is kept when saving. Version 1 files, from before modules could be added
-and removed, still load: they get the old fixed rack. The built-in presets
-live in `presets/` in the same format and are compiled into the binary. `just run path/to/patch.json` starts on a patch
-file; an unknown module, knob or port is reported by name. Block positions
+their default, so a patch always fully determines the sound. A sampler's
+sound is a `"file"` entry next to its `"type"`, a path that is relative to
+the directory the program runs in unless absolute (the editor saves
+absolute ones), so moving a sound breaks the patches using it: the patch
+still loads, that sampler stays silent, its button turns red and the path
+is kept when saving. A `notes` block's patterns and a `song`'s sections
+and tracks are entries there too (see [Melodies](#melodies) and
+[Songs](#songs)). Version 1 files, from before modules could be added and
+removed, still load: they get the old fixed rack. The built-in presets
+live in `presets/` in the same format and are compiled into the binary.
+`just run path/to/patch.json` starts on a patch file; an unknown module,
+knob, port or note is reported by name. Block positions
 from the graphical editor are saved under `positions`; the terminal UI
 ignores them. A patch without them, as one written by hand, opens with its
 blocks arranged in columns.
@@ -320,7 +324,8 @@ Module types, as patches and the editor's palette name them:
 | poly | the keyboard as four voices, for chords |
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs, started and stopped by `run` |
-| song | arranger: up to eight sections, each so many bars long, with a gate per section |
+| notes | melodies by note name: patterns A to D on a piano roll, `pitch` and `gate` outputs (see [Melodies](#melodies)) |
+| song | arranger: sections so many bars long, and eight tracks saying who plays which pattern in each (see [Songs](#songs)) |
 | lfo | slow sine, triangle, saw and square |
 | adsr | envelope from a gate: attack, decay, sustain, release |
 | noise | white noise |
@@ -402,32 +407,67 @@ knob. Without a pad, click the **Tap** button in rhythm: it sets the knob,
 and is greyed out while `tap` has a cable. A pad straight into a delay's
 `clock` works too: the delay takes the time between the last two hits.
 
+### Melodies
+
+A `notes` block plays melodies by note name rather than by voltage: up to
+four patterns, A to D, of up to 64 steps, drawn on a piano roll in the
+block. Click a cell to play that note on that step, click it again to take
+it away, drag along a row to hold the note. The rows are two octaves of the
+key picked above the grid, a root and one of 23 scales (major, minor,
+harmonic and melodic minor, pentatonics, blues, the modes, diminished,
+augmented, whole tone...), so a melody stays in key; ▲ and ▼ move an
+octave, and patterns longer than 16 steps turn pages. Any note plays: a
+note out of the key gets a red row of its own.
+
+It steps on `clock` like `seq`. Its `pitch` output follows the MIDI
+convention: patch it into an oscillator's `freq cv` with `freq` at middle
+C, 261.63 Hz, and every note is in tune. Its `gate` stays open through a
+held note and closes for the second half of a note's last step, so the
+next note starts afresh. `play` picks the pattern: 0 stops it, 1 plays A,
+2 B and so on, which is what a song's track gives; each start or change of
+pattern starts from the first step. Unplugged, it plays A. In a patch file:
+
+```json
+{ "name": "bass", "type": "notes", "key": "A minor",
+  "patterns": { "A": "A1 . A1 A2 . A1 E2 D2", "B": "F1 - - - G1 - - -" } }
+```
+
+A note is a name and an octave (`C4` is middle C, `C#4` or `Db4` the next
+one up), `-` holds the note before for another step, `.` is a rest.
+
 ### Songs
 
 A `song` block arranges a whole piece in one patch, so a patch file can be
-a complete track. It plays up to eight sections one after the other, each
-lasting its `length` knob in bars (0 skips it), and each `section` output is
-a gate that stays high while its section plays. Patch a clock's `bar` into
-its `clock`: each tick is a bar, and the first tick starts the first
-section.
+a complete track. It plays its sections one after the other, up to 16,
+each with a name and a length in bars, and it has eight tracks: an output
+each, one per instrument. A grid in the block sets which tracks play in
+each section, and which pattern: click a cell to go from silent to A, B, C,
+D and back, right-click to silence it. Each track is named after the blocks
+its output feeds.
 
-To bring an instrument in and out, patch the gates of the sections it plays
-in into its sequencer's `run cv`, with `run` at 0: the sequencer plays from
-its first step when one of its sections starts and falls silent outside
-them. Several cables into one input add up, and only one section plays at a
-time, so the cables from sections 2, 3 and 5 make a gate that is high in any
-of the three. A gate into a VCA's `mod`, with `gain` at 0, mutes a sound
-that has no sequencer, a drone or an effect's return.
+Patch a clock's `bar` into its `clock`: each tick is a bar, and the first
+tick starts the first section. A track's output is 0 while it is silent,
+and while it plays, the number of its pattern: 1 for A, 2 for B... Into a
+`notes` block's `play`, it picks the pattern; into a sequencer's `run cv`
+(with `run` at 0) or a VCA's `mod` (with `gain` at 0), use pattern A, which
+is a gate of exactly 1, to bring a drum, a drone or an effect in and out.
 
-After its last section, the song ends and every gate closes; with `loop` up
-past halfway, it starts over instead. Lengths can change while it plays:
-the song is a count of bars from its start, so setting the first sections
-to 0 jumps to a later one, which helps when working on the end of a piece.
-Plugging its `clock` again starts it over.
+```json
+{ "name": "song", "type": "song",
+  "sections": [{ "name": "intro", "bars": 4 }, { "name": "verse", "bars": 8 }],
+  "tracks": ["A A", ". B"] }
+```
+
+After its last section, the song ends and every track falls silent; with
+`loop` up past halfway, it starts over instead. Sections can change while
+it plays: the song is a count of bars from its start, so setting the first
+sections to 0 bars jumps to a later one, which helps when working on the
+end of a piece. Plugging its `clock` again starts it over.
 
 `just run song` plays the `song` preset: hats, then a kick, a bassline and
 an arpeggio coming in and out over seven sections, about a minute at 124
-BPM. `just run --render song.wav --seconds 70 song` writes it to a file.
+BPM, the bassline and the arpeggio on `notes` blocks. `just run --render
+song.wav --seconds 70 song` writes it to a file.
 
 In the DAW plugin, while the DAW plays, the song is where the DAW's song is,
 counting four beats to the bar, so it follows when you move the playhead.
@@ -435,18 +475,19 @@ To arrange in the DAW itself instead, run one instance per instrument.
 
 To have a language model write songs, give it the folder
 `skills/audiochaos-song`: `SKILL.md` explains the method and the patch
-format with instrument templates and a table of notes, `reference.md` lists
-every module's exact port and knob names (generated from the code), and
-`example.json` is a song in four sections. It fits in the context of a
-small local model, around 8,000 tokens in all, and needs nothing else from
-this repository.
+format with instrument templates and the notes of common keys,
+`reference.md` lists every module's exact port and knob names (generated
+from the code), and `example.json` is a song in four sections. It fits in
+the context of a small local model, around 8,000 tokens in all, and needs
+nothing else from this repository.
 
 ## How it works
 
 The engine, its threads, and the reasons behind its design are in
 [ARCHITECTURE.md](ARCHITECTURE.md); how to work on it, add a module or a
 preset is in [CONTRIBUTING.md](CONTRIBUTING.md). Changes from one release to
-the next are in [CHANGELOG.md](CHANGELOG.md).
+the next are in [CHANGELOG.md](CHANGELOG.md), and what is planned next in
+[ROADMAP.md](ROADMAP.md).
 
 ## Build, run, test
 

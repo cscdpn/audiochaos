@@ -20,6 +20,7 @@ pub mod master;
 pub mod midi;
 pub mod mixer;
 pub mod noise;
+pub mod notes;
 pub mod oscillator;
 pub mod phaser;
 pub mod poly;
@@ -71,7 +72,7 @@ pub struct Kind {
 
 /// Every kind of module, in the editor's palette order. Adding a module is
 /// adding it here.
-pub const KINDS: [Kind; 27] = [
+pub const KINDS: [Kind; 28] = [
     Kind {
         info: &input::INFO,
         build: |c, _| Box::new(input::Input::new(Arc::clone(&c.input))),
@@ -91,6 +92,10 @@ pub const KINDS: [Kind; 27] = [
     Kind {
         info: &sequencer::INFO,
         build: |c, _| Box::new(sequencer::Sequencer::new(c.sample_rate)),
+    },
+    Kind {
+        info: &notes::INFO,
+        build: |c, _| Box::new(notes::Notes::new(c.sample_rate)),
     },
     Kind {
         info: &song::INFO,

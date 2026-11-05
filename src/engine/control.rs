@@ -17,6 +17,7 @@ use super::graph::{
 use super::input::{CHANNELS, Feed, LiveInput};
 use super::module::{BLOCK, Module, ModuleInfo};
 use super::sample::Sample;
+use super::score::Score;
 
 /// Room for a whole patch's commands at once, as pasting one into the editor
 /// sends them, faster than the audio thread takes them: each module with its
@@ -40,6 +41,7 @@ enum Command {
     Remove(NodeId),
     Replace(Box<Graph>, NodeId),
     SetSample(NodeId, Box<Sample>),
+    SetScore(NodeId, Box<Score>),
 }
 
 /// What the audio thread hands back to be freed on the UI thread: freeing
@@ -49,6 +51,7 @@ enum Retired {
     Node(Box<Node>),
     Graph(Box<Graph>),
     Sample(Box<Sample>),
+    Score(Box<Score>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -86,6 +89,8 @@ pub struct NodeState {
     pub params: Vec<f32>,
     /// The sound it plays, for modules that play one.
     pub sample: Option<SampleState>,
+    /// Its arrangement or patterns, for modules that have one.
+    pub score: Option<Score>,
 }
 
 /// What the UI knows about a module's sound; the audio stays on the audio side.
@@ -260,6 +265,7 @@ impl Controller {
         }
         let id = free_slot(self.nodes.iter().map(|n| n.id)).ok_or(ControlError::TooManyModules)?;
         let info = module.info();
+        let score = module.score().cloned();
         let node = Box::new(Node::new(&name, module, self.sample_rate));
         self.push(Command::Add(id, node))?;
         self.nodes.push(NodeState {
@@ -268,6 +274,7 @@ impl Controller {
             info,
             params: info.params.iter().map(|p| p.default).collect(),
             sample: None,
+            score,
         });
         Ok(id)
     }
@@ -291,6 +298,15 @@ impl Controller {
         self.push(Command::SetSample(id, sample))?;
         let index = self.index(id);
         self.nodes[index].sample = Some(state);
+        Ok(())
+    }
+
+    /// Gives a module its score. The one it replaces comes back to be freed
+    /// on this thread.
+    pub fn set_score(&mut self, id: NodeId, score: Score) -> Result<(), ControlError> {
+        self.push(Command::SetScore(id, Box::new(score.clone())))?;
+        let index = self.index(id);
+        self.nodes[index].score = Some(score);
         Ok(())
     }
 
@@ -347,6 +363,7 @@ fn mirror(graph: &Graph) -> (Vec<NodeState>, CableSet) {
                 info,
                 params: (0..info.params.len()).map(|p| graph.param(id, p)).collect(),
                 sample: graph.sample(id).map(SampleState::of),
+                score: graph.score(id).cloned(),
             }
         })
         .collect();
@@ -493,6 +510,11 @@ impl Engine {
                 Command::SetSample(id, sample) => {
                     if let Some(old) = self.graph.set_sample(id, sample) {
                         self.retire(Retired::Sample(old));
+                    }
+                }
+                Command::SetScore(id, score) => {
+                    if let Some(old) = self.graph.set_score(id, score) {
+                        self.retire(Retired::Score(old));
                     }
                 }
             }

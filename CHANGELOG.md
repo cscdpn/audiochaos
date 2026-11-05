@@ -11,11 +11,15 @@ wrong.
 The first release.
 
 ### Sound
-- 27 modules: sources (`osc`, `noise`, `lfo`, `seq`, `clock`, `adsr`,
-  `sampler`, `looper`, `input`, `midi`, `poly`), processors (`filter`,
-  `dist`, `crush`, `delay`, `chorus`, `flanger`, `phaser`, `univibe`, `vca`,
-  `mix`), control (`s&h`, `atten`, `invert`, `logic`), the `song`
-  arranger and the `master`.
+- 28 modules: sources (`osc`, `noise`, `lfo`, `seq`, `notes`, `clock`,
+  `adsr`, `sampler`, `looper`, `input`, `midi`, `poly`), processors
+  (`filter`, `dist`, `crush`, `delay`, `chorus`, `flanger`, `phaser`,
+  `univibe`, `vca`, `mix`), control (`s&h`, `atten`, `invert`, `logic`),
+  the `song` arranger and the `master`.
+- Melodies by note name with `notes`: four patterns of up to 64 steps,
+  drawn on a piano roll in the key of your choice among 23 scales.
+- Whole pieces in one patch with `song`: named sections, and eight tracks
+  saying who plays which pattern in each, edited as a grid.
 - Every knob has a CV input; cables may feed back, with one block (64
   samples) of delay.
 - Seven presets: `chaos`, `bass`, `groovygroove`, `keys`, `chords`, `looper`,

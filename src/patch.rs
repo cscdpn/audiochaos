@@ -14,7 +14,10 @@ use crate::engine::control::Controller;
 use crate::engine::graph::{Cable, CableSet, Graph, GraphError, MAX_MODULES, NodeId};
 use crate::engine::module::ModuleInfo;
 use crate::engine::sample::Sample;
-use crate::modules::{self, Context, master, sampler};
+use crate::engine::score::{
+    self, Arrangement, Key, MAX_BARS, MAX_SECTIONS, PATTERNS, Patterns, Score, Section, TRACKS,
+};
+use crate::modules::{self, Context, master, notes, sampler, song};
 
 /// Bumped on incompatible format changes, so old files fail loudly instead of
 /// loading wrong.
@@ -59,7 +62,7 @@ pub struct Patch {
     pub positions: BTreeMap<String, [f32; 2]>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PatchModule {
     pub name: String,
@@ -70,6 +73,138 @@ pub struct PatchModule {
     /// program runs in unless absolute.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file: Option<String>,
+    /// A song's sections, in the order they play.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sections: Option<Vec<PatchSection>>,
+    /// A song's tracks, each a cell per section: `A` to `D` for the pattern
+    /// it plays there, `.` for silence. Missing ones are silent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tracks: Option<Vec<String>>,
+    /// The key a `notes` module's editor offers notes in: `A minor`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    /// A `notes` module's patterns by letter, `A` to `D`: notes by name,
+    /// `-` holding the note before, `.` for a rest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub patterns: Option<BTreeMap<String, String>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PatchSection {
+    pub name: String,
+    pub bars: u32,
+}
+
+impl PatchModule {
+    /// The score these fields describe, if any; the module keeps its own
+    /// otherwise.
+    fn score(&self) -> Result<Option<Score>, PatchError> {
+        let problem = |problem: String| PatchError::Score {
+            module: self.name.clone(),
+            problem,
+        };
+        let is_song = self.sections.is_some() || self.tracks.is_some();
+        let is_notes = self.key.is_some() || self.patterns.is_some();
+        if is_song && self.kind != song::INFO.name {
+            return Err(problem("only a song has sections and tracks".into()));
+        }
+        if is_notes && self.kind != notes::INFO.name {
+            return Err(problem("only a notes module has a key and patterns".into()));
+        }
+        if is_song {
+            let mut arrangement = Arrangement::default();
+            if let Some(sections) = &self.sections {
+                if sections.len() > MAX_SECTIONS {
+                    return Err(problem(format!("the most sections is {MAX_SECTIONS}")));
+                }
+                if let Some(s) = sections.iter().find(|s| s.bars > MAX_BARS) {
+                    return Err(problem(format!(
+                        "section {:?} is over {MAX_BARS} bars",
+                        s.name
+                    )));
+                }
+                arrangement.sections = sections
+                    .iter()
+                    .map(|s| Section {
+                        name: s.name.clone(),
+                        bars: s.bars,
+                        tracks: [None; TRACKS],
+                    })
+                    .collect();
+            }
+            let tracks = self.tracks.as_deref().unwrap_or_default();
+            if tracks.len() > TRACKS {
+                return Err(problem(format!("the most tracks is {TRACKS}")));
+            }
+            let sections = arrangement.sections.len();
+            for (t, text) in tracks.iter().enumerate() {
+                let cells = score::parse_cells(text, sections)
+                    .map_err(|e| problem(format!("track {}: {e}", t + 1)))?;
+                for (section, cell) in arrangement.sections.iter_mut().zip(cells) {
+                    section.tracks[t] = cell;
+                }
+            }
+            return Ok(Some(Score::Arrangement(arrangement)));
+        }
+        if is_notes {
+            let mut patterns = Patterns::default();
+            if let Some(key) = &self.key {
+                patterns.key = Key::parse(key).map_err(problem)?;
+            }
+            if let Some(texts) = &self.patterns {
+                patterns.patterns = Default::default();
+                for (letter, text) in texts {
+                    let index = ["A", "B", "C", "D"]
+                        .iter()
+                        .position(|l| l == letter)
+                        .ok_or_else(|| problem(format!("unknown pattern {letter:?}: A to D")))?;
+                    patterns.patterns[index] = score::parse_steps(text)
+                        .map_err(|e| problem(format!("pattern {letter}: {e}")))?;
+                }
+            }
+            return Ok(Some(Score::Patterns(patterns)));
+        }
+        Ok(None)
+    }
+
+    /// Writes a score into these fields.
+    fn set_score(&mut self, score: &Score) {
+        match score {
+            Score::Arrangement(arrangement) => {
+                self.sections = Some(
+                    arrangement
+                        .sections
+                        .iter()
+                        .map(|s| PatchSection {
+                            name: s.name.clone(),
+                            bars: s.bars,
+                        })
+                        .collect(),
+                );
+                let mut tracks: Vec<String> = (0..TRACKS)
+                    .map(|t| score::cells_text(arrangement.sections.iter().map(|s| s.tracks[t])))
+                    .collect();
+                let silent = |track: &String| !track.contains(|c: char| c.is_ascii_uppercase());
+                while tracks.last().is_some_and(silent) {
+                    tracks.pop();
+                }
+                self.tracks = (!tracks.is_empty()).then_some(tracks);
+            }
+            Score::Patterns(patterns) => {
+                self.key = Some(patterns.key.name());
+                self.patterns = Some(
+                    (0..PATTERNS)
+                        .filter(|&p| !patterns.patterns[p].is_empty())
+                        .map(|p| {
+                            let letter = score::pattern_letter(p as u8).to_string();
+                            (letter, score::steps_text(&patterns.patterns[p]))
+                        })
+                        .collect(),
+                );
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -122,6 +257,11 @@ pub enum PatchError {
     DuplicateModule(String),
     /// A module other than a sampler was given a file.
     NotASampler(String),
+    /// A song's arrangement or a `notes` module's patterns are wrong.
+    Score {
+        module: String,
+        problem: String,
+    },
     TooManyModules,
     /// A patch needs exactly one master; holds how many it has.
     Masters(usize),
@@ -152,6 +292,7 @@ impl fmt::Display for PatchError {
             }
             PatchError::DuplicateModule(m) => write!(f, "two modules are named {m:?}"),
             PatchError::NotASampler(m) => write!(f, "module {m:?} is no sampler: it takes no file"),
+            PatchError::Score { module, problem } => write!(f, "module {module:?}: {problem}"),
             PatchError::TooManyModules => write!(f, "too many modules (max {MAX_MODULES})"),
             PatchError::Masters(n) => {
                 write!(f, "a patch needs exactly one master module, not {n}")
@@ -192,7 +333,7 @@ impl Patch {
                     .map(|(name, kind)| PatchModule {
                         name: name.to_string(),
                         kind: kind.to_string(),
-                        file: None,
+                        ..Default::default()
                     })
                     .collect();
                 patch.version = VERSION;
@@ -207,12 +348,13 @@ impl Patch {
     }
 
     /// Records every module, knob and cable. `params` holds each module's
-    /// knob values and `files` its sound file if it has one, both in the order
-    /// of `modules`.
+    /// knob values, `files` its sound file and `scores` its score if it has
+    /// them, all in the order of `modules`.
     pub fn capture(
         modules: &Modules,
         params: &[&[f32]],
         files: &[Option<&str>],
+        scores: &[Option<&Score>],
         cables: &[Cable],
     ) -> Patch {
         let knobs = modules
@@ -255,10 +397,18 @@ impl Patch {
             modules: modules
                 .iter()
                 .zip(files)
-                .map(|((_, name, info), file)| PatchModule {
-                    name: name.to_string(),
-                    kind: info.name.to_string(),
-                    file: file.map(str::to_string),
+                .zip(scores)
+                .map(|(((_, name, info), file), score)| {
+                    let mut module = PatchModule {
+                        name: name.to_string(),
+                        kind: info.name.to_string(),
+                        file: file.map(str::to_string),
+                        ..Default::default()
+                    };
+                    if let Some(score) = score {
+                        module.set_score(score);
+                    }
+                    module
                 })
                 .collect(),
             knobs,
@@ -336,6 +486,9 @@ impl Patch {
                 }
                 graph.set_sample(id, Box::new(Sample::load_or_silence(file)));
             }
+            if let Some(score) = m.score()? {
+                graph.set_score(id, Box::new(score));
+            }
             if m.kind == master::INFO.name {
                 masters.push(id);
             }
@@ -367,7 +520,14 @@ impl Patch {
             .nodes()
             .map(|n| graph.sample(n).map(|s| s.path.as_str()))
             .collect();
-        Patch::capture(&graph_modules(graph), &params, &files, graph.cables())
+        let scores: Vec<_> = graph.nodes().map(|n| graph.score(n)).collect();
+        Patch::capture(
+            &graph_modules(graph),
+            &params,
+            &files,
+            &scores,
+            graph.cables(),
+        )
     }
 
     /// Replaces the playing patch, modules included. Returns what went wrong
@@ -394,10 +554,16 @@ impl Patch {
             .iter()
             .map(|n| n.sample.as_ref().map(|s| s.path.as_str()))
             .collect();
+        let scores: Vec<_> = controller
+            .nodes()
+            .iter()
+            .map(|n| n.score.as_ref())
+            .collect();
         Patch::capture(
             &controller_modules(controller),
             &params,
             &files,
+            &scores,
             controller.cables(),
         )
     }
@@ -499,6 +665,9 @@ impl Patch {
                     return Err(PatchError::NotASampler(m.name.clone()).into());
                 }
                 controller.set_sample(id, Box::new(Sample::load_or_silence(file)))?;
+            }
+            if let Some(score) = m.score()? {
+                controller.set_score(id, score)?;
             }
             let info = controller.node(id).info;
             for (knob, &value) in self.knobs.get(&m.name).into_iter().flatten() {
@@ -827,7 +996,7 @@ mod tests {
             big.modules.push(PatchModule {
                 name: name(i),
                 kind: sequencer::INFO.name.into(),
-                file: None,
+                ..Default::default()
             });
             let knobs = sequencer::INFO.params.iter();
             big.knobs
@@ -943,6 +1112,97 @@ mod tests {
             error(json),
             r#"module "master" is no sampler: it takes no file"#
         );
+    }
+
+    /// A song and a notes module, with their scores.
+    const SCORED: &str = r#"{ "version": 2, "modules": [
+        { "name": "song", "type": "song",
+          "sections": [{ "name": "verse", "bars": 8 }, { "name": "chorus", "bars": 4 }],
+          "tracks": ["A B", ". A"] },
+        { "name": "bass", "type": "notes", "key": "A minor",
+          "patterns": { "A": "A2 - . C3", "C": "E2" } },
+        { "name": "master", "type": "master" }
+    ] }"#;
+
+    #[test]
+    fn songs_and_notes_keep_their_scores() {
+        let (g, _) = patch(SCORED).build(&Context::new(SR)).unwrap();
+        let Some(Score::Arrangement(arrangement)) = g.score(NodeId(0)) else {
+            panic!("no arrangement")
+        };
+        let names: Vec<_> = arrangement
+            .sections
+            .iter()
+            .map(|s| (s.name.as_str(), s.bars))
+            .collect();
+        assert_eq!(names, [("verse", 8), ("chorus", 4)]);
+        assert_eq!(arrangement.sections[0].tracks[..3], [Some(0), None, None]);
+        assert_eq!(
+            arrangement.sections[1].tracks[..3],
+            [Some(1), Some(0), None]
+        );
+        let Some(Score::Patterns(patterns)) = g.score(NodeId(1)) else {
+            panic!("no patterns")
+        };
+        assert_eq!(patterns.key.name(), "A minor");
+        assert_eq!(patterns.patterns[0].len(), 4);
+        assert!(patterns.patterns[1].is_empty());
+
+        let saved = Patch::from_graph(&g);
+        assert_eq!(saved.modules, patch(SCORED).modules);
+    }
+
+    #[test]
+    fn modules_without_a_score_in_the_file_keep_their_own() {
+        let json = r#"{ "version": 2, "modules": [
+            { "name": "song", "type": "song" }, { "name": "master", "type": "master" }
+        ] }"#;
+        let saved = Patch::from_graph(&patch(json).build(&Context::new(SR)).unwrap().0);
+        let sections = saved.modules[0].sections.as_ref().unwrap();
+        assert_eq!(sections.len(), 4, "the default arrangement");
+        assert_eq!(saved.modules[0].tracks, None, "every track silent");
+    }
+
+    #[test]
+    fn mistakes_in_scores_are_named() {
+        let with = |old: &str, new: &str| error(&SCORED.replace(old, new));
+        assert_eq!(
+            with(r#""E2""#, r#""E2 H2""#),
+            r#"module "bass": pattern C: unknown note "H2": a name and an octave, as "A2""#
+        );
+        assert_eq!(
+            with(r#""A B""#, r#""A B A""#),
+            r#"module "song": track 1: 3 cells for 2 sections"#
+        );
+        assert_eq!(
+            with(r#""A minor""#, r#""A moody""#),
+            r#"module "bass": unknown key "A moody": a note and a scale, as "A minor""#
+        );
+        assert_eq!(
+            with(r#""C": "E2""#, r#""E": "E2""#),
+            r#"module "bass": unknown pattern "E": A to D"#
+        );
+        assert_eq!(
+            with(r#""type": "notes""#, r#""type": "seq""#),
+            r#"module "bass": only a notes module has a key and patterns"#
+        );
+        assert_eq!(
+            with(r#""type": "song""#, r#""type": "seq""#),
+            r#"module "song": only a song has sections and tracks"#
+        );
+    }
+
+    #[test]
+    fn inserted_copies_keep_their_scores() {
+        let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 256);
+        let added = patch(SCORED)
+            .insert_into(&mut controller, &Context::new(SR))
+            .unwrap();
+        let saved = Patch::from_controller(&controller);
+        let copy = |name: &str| saved.modules.iter().find(|m| m.name == name).unwrap();
+        assert_eq!(added.len(), 2);
+        assert_eq!(copy("song").tracks, patch(SCORED).modules[0].tracks);
+        assert_eq!(copy("bass").patterns, patch(SCORED).modules[1].patterns);
     }
 
     #[test]

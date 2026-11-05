@@ -53,6 +53,7 @@ fn with_viewer(editor: &mut Editor, f: impl FnOnce(&mut Viewer, &mut Snarl<NodeI
         sizes: &mut editor.sizes,
         show_origin: &mut editor.show_origin,
         taps: &mut editor.taps,
+        note_views: &mut editor.note_views,
         to_global: &mut editor.to_global,
         to_duplicate: &mut editor.to_duplicate,
         view: Rect::ZERO,
@@ -988,4 +989,85 @@ fn renders_without_a_window() {
         paint(&mut editor, &ctx, vec![]);
     }
     assert!(editor.status.is_empty(), "{}", editor.status);
+}
+
+fn editor_for(json: &str) -> Editor {
+    let patch = Patch::from_json(json).unwrap();
+    let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
+    let (_, controller) = Engine::new(graph, out, 1024);
+    Editor::new(controller, Context::new(48_000.0), &patch.positions)
+}
+
+/// Moves the pointer to `pos` and clicks there, a frame each.
+fn click_at(editor: &mut Editor, ctx: &egui::Context, pos: Pos2, button: egui::PointerButton) {
+    paint(editor, ctx, vec![egui::Event::PointerMoved(pos)]);
+    paint(editor, ctx, vec![click(pos, button, true)]);
+    paint(editor, ctx, vec![click(pos, button, false)]);
+}
+
+#[test]
+fn clicking_a_song_cell_picks_the_next_pattern() {
+    use crate::engine::score::Score;
+    use egui::PointerButton::{Primary, Secondary};
+
+    let mut editor = editor_for(
+        r#"{ "version": 2, "modules": [
+            { "name": "song", "type": "song", "sections": [{ "name": "verse", "bars": 4 }] },
+            { "name": "lead", "type": "notes" },
+            { "name": "master", "type": "master" }
+        ], "cables": [{ "from": "song", "output": "track 2", "to": "lead", "input": "play" }] }"#,
+    );
+    let ctx = egui::Context::default();
+    paint(&mut editor, &ctx, vec![]);
+    let shapes = paint(&mut editor, &ctx, vec![]);
+    // Tracks are named after what they feed.
+    let cell = egui::pos2(
+        text_at(&shapes, "verse").center().x,
+        text_at(&shapes, "2 lead").center().y,
+    );
+    let id = module(&editor, "song");
+    let track_2 = |editor: &Editor| match &editor.controller.node(id).score {
+        Some(Score::Arrangement(a)) => a.sections[0].tracks[1],
+        _ => panic!("no arrangement"),
+    };
+    click_at(&mut editor, &ctx, cell, Primary);
+    assert_eq!(track_2(&editor), Some(0));
+    click_at(&mut editor, &ctx, cell, Primary);
+    assert_eq!(track_2(&editor), Some(1));
+    click_at(&mut editor, &ctx, cell, Secondary);
+    assert_eq!(track_2(&editor), None);
+}
+
+#[test]
+fn clicking_the_piano_roll_plays_a_note_there() {
+    use super::score::STEP_WIDTH;
+    use crate::engine::score::{Score, Step, parse_note};
+    use egui::PointerButton::Primary;
+
+    let mut editor = editor_for(
+        r#"{ "version": 2, "modules": [
+            { "name": "bass", "type": "notes", "key": "C major", "patterns": { "A": ". . . ." } },
+            { "name": "master", "type": "master" }
+        ] }"#,
+    );
+    let ctx = egui::Context::default();
+    paint(&mut editor, &ctx, vec![]);
+    let shapes = paint(&mut editor, &ctx, vec![]);
+    // Note names end a little left of the grid; the second step.
+    let label = text_at(&shapes, "E3");
+    let scale = editor.to_global.scaling;
+    let step_2 = egui::pos2(
+        label.right() + (3.0 + 1.5 * STEP_WIDTH) * scale,
+        label.center().y,
+    );
+    click_at(&mut editor, &ctx, step_2, Primary);
+    let id = module(&editor, "bass");
+    let Some(Score::Patterns(patterns)) = &editor.controller.node(id).score else {
+        panic!("no patterns")
+    };
+    let e3 = parse_note("E3").unwrap();
+    assert_eq!(
+        patterns.patterns[0],
+        [Step::Rest, Step::Note(e3), Step::Rest, Step::Rest]
+    );
 }

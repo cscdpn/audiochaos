@@ -16,6 +16,7 @@ src/
     input.rs       the sound card's input, from its callback to the engine
     record.rs      WAV: offline renders, live recording through a writer thread
     sample.rs      sound files in memory, for samplers
+    score.rs       a song's arrangement, a notes block's patterns, scales
     transport.rs   the DAW's tempo and position, for clocks
     audio.rs       cpal: sound cards, streams, low latency (feature app)
   modules/       one file per module; mod.rs is the registry (KINDS)
@@ -70,7 +71,10 @@ up. Everything else follows from it:
   preallocated slots (256), cables in a fixed-capacity set (1024), so neither side
   ever reallocates. Loading a patch swaps in a whole new graph in one go.
 - A sound file is read on the UI thread and moved to the audio thread whole;
-  the one it replaces comes back the same way as a removed module.
+  the one it replaces comes back the same way as a removed module. Scores,
+  a song's arrangement or a `notes` block's patterns, travel the same way:
+  each edit in their grid sends a whole new score, so the audio thread
+  never sees one half changed.
 - MIDI: midir's threads, or the host, decode messages into atomics that
   `midi` modules read once per block, so a burst of knob turns never stalls
   the audio.

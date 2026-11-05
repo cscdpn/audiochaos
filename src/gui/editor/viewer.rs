@@ -11,11 +11,13 @@ use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
 use crate::engine::sample::Sample;
+use crate::engine::score::{Score, TRACKS};
 use crate::modules::clock::Tap;
 use crate::modules::{self, Context, clock, master, sampler};
 use crate::patch;
 
 use super::layout::BLOCK_GAP;
+use super::score::{self, NoteView};
 use super::snarl_id;
 use super::widgets::{AUDIO_PIN, CV_PIN, SLIDER_WIDTH, knob, led};
 
@@ -27,6 +29,7 @@ pub(super) struct Viewer<'a> {
     pub(super) sizes: &'a mut HashMap<BlockId, Vec2>,
     pub(super) show_origin: &'a mut bool,
     pub(super) taps: &'a mut HashMap<NodeId, Tap>,
+    pub(super) note_views: &'a mut HashMap<NodeId, NoteView>,
     pub(super) to_global: &'a mut TSTransform,
     pub(super) to_duplicate: &'a mut Option<Vec<BlockId>>,
     /// Where the graph is drawn, on screen.
@@ -41,6 +44,22 @@ impl Viewer<'_> {
             to: snarl[to.node],
             to_port: to.input,
         }
+    }
+
+    /// Each track of a song by number and what its output feeds.
+    fn track_names(&self, id: NodeId) -> Vec<String> {
+        (0..TRACKS)
+            .map(|t| {
+                let fed: Vec<&str> = self
+                    .controller
+                    .cables()
+                    .iter()
+                    .filter(|c| c.from == id && c.from_port == t)
+                    .map(|c| self.controller.node(c.to).name.as_str())
+                    .collect();
+                format!("{} {}", t + 1, fed.join(", "))
+            })
+            .collect()
     }
 
     /// Shows the sound's file; clicking it picks another.
@@ -243,6 +262,20 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
             }
             if info.name == clock::INFO.name {
                 self.show_tap_button(id, ui);
+            }
+            if let Some(mut score) = self.controller.node(id).score.clone() {
+                let changed = match &mut score {
+                    Score::Arrangement(arrangement) => {
+                        score::arrangement(arrangement, &self.track_names(id), ui)
+                    }
+                    Score::Patterns(patterns) => {
+                        let view = self.note_views.entry(id).or_default();
+                        score::patterns(patterns, view, ui)
+                    }
+                };
+                if changed && let Err(e) = self.controller.set_score(id, score) {
+                    *self.status = format!("not changed: {e}");
+                }
             }
         });
     }

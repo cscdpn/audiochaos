@@ -13,4 +13,5 @@ pub mod module;
 pub mod param;
 pub mod record;
 pub mod sample;
+pub mod score;
 pub mod transport;

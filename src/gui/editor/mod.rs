@@ -4,6 +4,7 @@
 //! controls inside blocks, `layout` where unplaced blocks go.
 
 mod layout;
+mod score;
 mod viewer;
 mod widgets;
 
@@ -23,6 +24,7 @@ use crate::modules::clock::Tap;
 use crate::patch::Patch;
 
 use layout::{BLOCK_GAP, columns, default_layout, estimated_size};
+use score::NoteView;
 use viewer::Viewer;
 use widgets::marked;
 
@@ -53,6 +55,8 @@ pub struct Editor {
     arrange_once_drawn: bool,
     /// Each clock's Tap button.
     taps: HashMap<NodeId, Tap>,
+    /// Where each `notes` block's piano roll is looking.
+    note_views: HashMap<NodeId, NoteView>,
     /// From graph to screen coordinates, as last drawn.
     to_global: TSTransform,
     /// Where the graph is drawn, on screen.
@@ -77,6 +81,7 @@ impl Editor {
             show_origin: false,
             arrange_once_drawn: false,
             taps: HashMap::new(),
+            note_views: HashMap::new(),
             to_global: TSTransform::IDENTITY,
             view: Rect::ZERO,
             to_duplicate: None,
@@ -91,6 +96,8 @@ impl Editor {
     fn rebuild(&mut self, positions: &BTreeMap<String, [f32; 2]>) {
         let layout = default_layout(&self.controller);
         self.arrange_once_drawn = positions.is_empty();
+        // Module ids are reused by the new patch's modules.
+        self.note_views.clear();
         self.snarl = Snarl::new();
         self.sizes.clear();
         for (node, default) in self.controller.nodes().iter().zip(layout) {
@@ -332,6 +339,7 @@ impl Editor {
             sizes: &mut self.sizes,
             show_origin: &mut self.show_origin,
             taps: &mut self.taps,
+            note_views: &mut self.note_views,
             to_global: &mut self.to_global,
             to_duplicate: &mut self.to_duplicate,
             view: self.view,

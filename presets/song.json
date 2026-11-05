@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "description": "A whole short piece arranged by `song`: hats, then a kick, a bassline and an arpeggio coming in and out over seven sections, a minute at 124 BPM. It ends after the last section: turn the song's `loop` up to hear it again and again.",
+  "description": "A whole short piece arranged by `song`: hats, then a kick, a bassline and an arpeggio coming in and out over seven sections, a minute at 124 BPM. The bassline and the arpeggio are `notes` blocks. It ends after the last section: turn the song's `loop` up to hear it again and again.",
   "modules": [
     {
       "name": "clock",
@@ -8,7 +8,43 @@
     },
     {
       "name": "song",
-      "type": "song"
+      "type": "song",
+      "sections": [
+        {
+          "name": "intro",
+          "bars": 2
+        },
+        {
+          "name": "groove",
+          "bars": 4
+        },
+        {
+          "name": "bass",
+          "bars": 4
+        },
+        {
+          "name": "full",
+          "bars": 8
+        },
+        {
+          "name": "break",
+          "bars": 4
+        },
+        {
+          "name": "peak",
+          "bars": 8
+        },
+        {
+          "name": "outro",
+          "bars": 4
+        }
+      ],
+      "tracks": [
+        "A A A A A A .",
+        ". A A A . A A",
+        ". . A A . A A",
+        ". . . A A A ."
+      ]
     },
     {
       "name": "kick",
@@ -20,11 +56,19 @@
     },
     {
       "name": "bass",
-      "type": "seq"
+      "type": "notes",
+      "key": "A minor",
+      "patterns": {
+        "A": "A1 A1 A2 A1 C2 A1 E2 D2"
+      }
     },
     {
       "name": "lead",
-      "type": "seq"
+      "type": "notes",
+      "key": "A minor",
+      "patterns": {
+        "A": "A3 C4 E4 A4 G4 E4 C4 E4"
+      }
     },
     {
       "name": "kick env",
@@ -97,16 +141,7 @@
   ],
   "knobs": {
     "bass": {
-      "rate": 4.0,
-      "run": 0.0,
-      "step 1": 0.0,
-      "step 2": 0.0,
-      "step 3": 0.07526,
-      "step 4": 0.0,
-      "step 5": 0.01881,
-      "step 6": 0.0,
-      "step 7": 0.0439,
-      "step 8": 0.03136
+      "rate": 4.0
     },
     "bass env": {
       "attack": 0.003,
@@ -120,7 +155,7 @@
     },
     "bass osc": {
       "fm depth": 100.0,
-      "freq": 55.0
+      "freq": 261.63
     },
     "bass vca": {
       "gain": 0.0
@@ -179,16 +214,7 @@
       "gain": 0.0
     },
     "lead": {
-      "rate": 4.0,
-      "run": 0.0,
-      "step 1": 0.0,
-      "step 2": 0.01881,
-      "step 3": 0.0439,
-      "step 4": 0.07526,
-      "step 5": 0.06271,
-      "step 6": 0.0439,
-      "step 7": 0.01881,
-      "step 8": 0.0439
+      "rate": 4.0
     },
     "lead delay": {
       "feedback": 0.45,
@@ -203,7 +229,7 @@
     },
     "lead osc": {
       "fm depth": 100.0,
-      "freq": 220.0
+      "freq": 261.63
     },
     "lead vca": {
       "gain": 0.0
@@ -218,14 +244,6 @@
       "level 4": 0.35
     },
     "song": {
-      "length 1": 2.0,
-      "length 2": 4.0,
-      "length 3": 4.0,
-      "length 4": 8.0,
-      "length 5": 4.0,
-      "length 6": 8.0,
-      "length 7": 4.0,
-      "length 8": 0.0,
       "loop": 0.0
     }
   },
@@ -268,111 +286,27 @@
     },
     {
       "from": "song",
-      "output": "section 1",
+      "output": "track 1",
       "to": "hats",
       "input": "run cv"
     },
     {
       "from": "song",
-      "output": "section 2",
-      "to": "hats",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 3",
-      "to": "hats",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 4",
-      "to": "hats",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 5",
-      "to": "hats",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 6",
-      "to": "hats",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 2",
+      "output": "track 2",
       "to": "kick",
       "input": "run cv"
     },
     {
       "from": "song",
-      "output": "section 3",
-      "to": "kick",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 4",
-      "to": "kick",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 6",
-      "to": "kick",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 7",
-      "to": "kick",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 3",
+      "output": "track 3",
       "to": "bass",
-      "input": "run cv"
+      "input": "play"
     },
     {
       "from": "song",
-      "output": "section 4",
-      "to": "bass",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 6",
-      "to": "bass",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 7",
-      "to": "bass",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 4",
+      "output": "track 4",
       "to": "lead",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 5",
-      "to": "lead",
-      "input": "run cv"
-    },
-    {
-      "from": "song",
-      "output": "section 6",
-      "to": "lead",
-      "input": "run cv"
+      "input": "play"
     },
     {
       "from": "kick",
@@ -436,7 +370,7 @@
     },
     {
       "from": "bass",
-      "output": "cv",
+      "output": "pitch",
       "to": "bass osc",
       "input": "freq cv"
     },
@@ -460,7 +394,7 @@
     },
     {
       "from": "lead",
-      "output": "cv",
+      "output": "pitch",
       "to": "lead osc",
       "input": "freq cv"
     },

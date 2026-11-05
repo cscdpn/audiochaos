@@ -6,6 +6,7 @@ use std::fmt;
 use super::module::{BLOCK, Buffer, Module, ModuleInfo};
 use super::param::Smoothed;
 use super::sample::Sample;
+use super::score::Score;
 
 /// Cables are stored in a vector allocated once with this capacity, so that
 /// connecting from the audio thread never allocates.
@@ -319,6 +320,15 @@ impl Graph {
 
     pub fn sample(&self, node: NodeId) -> Option<&Sample> {
         self.node(node).module.sample()
+    }
+
+    /// Like `set_sample`, for a score.
+    pub fn set_score(&mut self, node: NodeId, score: Box<Score>) -> Option<Box<Score>> {
+        self.node_mut(node).module.set_score(score)
+    }
+
+    pub fn score(&self, node: NodeId) -> Option<&Score> {
+        self.node(node).module.score()
     }
 
     /// The value a knob took on the last sample processed, CV included, if

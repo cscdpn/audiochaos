@@ -3,6 +3,7 @@
 
 use super::param::ParamInfo;
 use super::sample::Sample;
+use super::score::Score;
 
 /// Number of samples processed per call. Small enough for low latency,
 /// large enough to amortise the per-call overhead.
@@ -66,6 +67,18 @@ pub trait Module: Send {
 
     /// The sound the module plays, if it plays one.
     fn sample(&self) -> Option<&Sample> {
+        None
+    }
+
+    /// Gives the module its score, an arrangement or patterns, and hands
+    /// back the one it replaces, like `set_sample`. Modules without a score,
+    /// or of another kind, hand back the one they were given.
+    fn set_score(&mut self, score: Box<Score>) -> Option<Box<Score>> {
+        Some(score)
+    }
+
+    /// The score the module plays, if it has one.
+    fn score(&self) -> Option<&Score> {
         None
     }
 
