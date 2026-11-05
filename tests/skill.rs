@@ -68,7 +68,10 @@ fn the_module_reference_is_up_to_date() {
     if std::env::var_os("UPDATE_SKILL").is_some() {
         std::fs::write(&path, &expected).unwrap();
     }
-    let actual = std::fs::read_to_string(&path).unwrap_or_default();
+    // Git checks text files out with CRLF line endings on Windows.
+    let actual = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
     assert!(
         actual == expected,
         "{} is out of date: run `UPDATE_SKILL=1 cargo test --test skill`",
