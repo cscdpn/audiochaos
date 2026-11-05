@@ -1,0 +1,801 @@
+{
+  "version": 2,
+  "description": "Starfall Relay: 16-bit sci-fi chiptune at 128 BPM in D minor (Dm Bb F C). 1 intro (8 bars): drone and arpeggio. 2 verse (8): drums, bass, arpeggio. 3 chorus (8): full band with the lead hook. 4 break (8): drone and lead. 5 last chorus (8): the lead an octave higher. 6 outro (8): drone and arpeggio.",
+  "modules": [
+    {
+      "name": "clock",
+      "type": "clock"
+    },
+    {
+      "name": "song",
+      "type": "song"
+    },
+    {
+      "name": "chords seq",
+      "type": "seq"
+    },
+    {
+      "name": "bass seq",
+      "type": "seq"
+    },
+    {
+      "name": "arp seq",
+      "type": "seq"
+    },
+    {
+      "name": "lead seq",
+      "type": "seq"
+    },
+    {
+      "name": "kick seq",
+      "type": "seq"
+    },
+    {
+      "name": "snare seq",
+      "type": "seq"
+    },
+    {
+      "name": "hats seq",
+      "type": "seq"
+    },
+    {
+      "name": "snare hits",
+      "type": "logic"
+    },
+    {
+      "name": "kick env",
+      "type": "adsr"
+    },
+    {
+      "name": "snare env",
+      "type": "adsr"
+    },
+    {
+      "name": "hats env",
+      "type": "adsr"
+    },
+    {
+      "name": "bass env",
+      "type": "adsr"
+    },
+    {
+      "name": "arp env",
+      "type": "adsr"
+    },
+    {
+      "name": "lead env",
+      "type": "adsr"
+    },
+    {
+      "name": "lift",
+      "type": "atten"
+    },
+    {
+      "name": "noise",
+      "type": "noise"
+    },
+    {
+      "name": "kick osc",
+      "type": "osc"
+    },
+    {
+      "name": "bass osc",
+      "type": "osc"
+    },
+    {
+      "name": "arp osc",
+      "type": "osc"
+    },
+    {
+      "name": "lead osc",
+      "type": "osc"
+    },
+    {
+      "name": "drone osc",
+      "type": "osc"
+    },
+    {
+      "name": "snare filter",
+      "type": "filter"
+    },
+    {
+      "name": "hats filter",
+      "type": "filter"
+    },
+    {
+      "name": "bass filter",
+      "type": "filter"
+    },
+    {
+      "name": "drone filter",
+      "type": "filter"
+    },
+    {
+      "name": "kick vca",
+      "type": "vca"
+    },
+    {
+      "name": "snare vca",
+      "type": "vca"
+    },
+    {
+      "name": "hats vca",
+      "type": "vca"
+    },
+    {
+      "name": "bass vca",
+      "type": "vca"
+    },
+    {
+      "name": "arp vca",
+      "type": "vca"
+    },
+    {
+      "name": "lead vca",
+      "type": "vca"
+    },
+    {
+      "name": "drone vca",
+      "type": "vca"
+    },
+    {
+      "name": "lead delay",
+      "type": "delay"
+    },
+    {
+      "name": "drums mix",
+      "type": "mix"
+    },
+    {
+      "name": "music mix",
+      "type": "mix"
+    },
+    {
+      "name": "master",
+      "type": "master"
+    }
+  ],
+  "knobs": {
+    "clock": {
+      "tempo": 128.0
+    },
+    "song": {
+      "length 1": 8.0,
+      "length 2": 8.0,
+      "length 3": 8.0,
+      "length 4": 8.0,
+      "length 5": 8.0,
+      "length 6": 8.0,
+      "length 7": 0.0,
+      "length 8": 0.0
+    },
+    "chords seq": {
+      "run": 1.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": -0.01881,
+      "step 4": -0.01881,
+      "step 5": -0.03135,
+      "step 6": -0.03135,
+      "step 7": -0.01254,
+      "step 8": -0.01254
+    },
+    "bass seq": {
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.07524,
+      "step 4": 0.0,
+      "step 5": 0.04389,
+      "step 6": 0.0,
+      "step 7": 0.07524,
+      "step 8": 0.0
+    },
+    "arp seq": {
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 0.04389,
+      "step 3": 0.07524,
+      "step 4": 0.09405,
+      "step 5": 0.07524,
+      "step 6": 0.04389,
+      "step 7": 0.01881,
+      "step 8": 0.04389
+    },
+    "lead seq": {
+      "run": 0.0,
+      "step 1": 0.04389,
+      "step 2": 0.04389,
+      "step 3": 0.0627,
+      "step 4": 0.07524,
+      "step 5": 0.0627,
+      "step 6": 0.04389,
+      "step 7": 0.03135,
+      "step 8": 0.01881
+    },
+    "kick seq": {
+      "run": 0.0
+    },
+    "snare seq": {
+      "run": 0.0,
+      "step 1": 0.0,
+      "step 2": 1.0,
+      "step 3": 0.0,
+      "step 4": 1.0,
+      "step 5": 0.0,
+      "step 6": 1.0,
+      "step 7": 0.0,
+      "step 8": 1.0
+    },
+    "hats seq": {
+      "run": 0.0
+    },
+    "kick env": {
+      "attack": 0.001,
+      "decay": 0.2,
+      "sustain": 0.0,
+      "release": 0.1
+    },
+    "snare env": {
+      "attack": 0.001,
+      "decay": 0.12,
+      "sustain": 0.0,
+      "release": 0.08
+    },
+    "hats env": {
+      "attack": 0.001,
+      "decay": 0.04,
+      "sustain": 0.0,
+      "release": 0.03
+    },
+    "bass env": {
+      "attack": 0.003,
+      "decay": 0.15,
+      "sustain": 0.3,
+      "release": 0.05
+    },
+    "arp env": {
+      "attack": 0.001,
+      "decay": 0.1,
+      "sustain": 0.3,
+      "release": 0.05
+    },
+    "lead env": {
+      "attack": 0.005,
+      "decay": 0.15,
+      "sustain": 0.6,
+      "release": 0.1
+    },
+    "lift": {
+      "gain a": 0.07524
+    },
+    "kick osc": {
+      "freq": 45.0,
+      "fm depth": 120.0
+    },
+    "bass osc": {
+      "freq": 73.42
+    },
+    "arp osc": {
+      "freq": 293.66
+    },
+    "lead osc": {
+      "freq": 587.33
+    },
+    "drone osc": {
+      "freq": 146.83
+    },
+    "snare filter": {
+      "cutoff": 1800.0,
+      "resonance": 0.3
+    },
+    "hats filter": {
+      "cutoff": 7000.0
+    },
+    "bass filter": {
+      "cutoff": 500.0,
+      "resonance": 0.6
+    },
+    "drone filter": {
+      "cutoff": 900.0,
+      "resonance": 0.2
+    },
+    "kick vca": {
+      "gain": 0.0
+    },
+    "snare vca": {
+      "gain": 0.0
+    },
+    "hats vca": {
+      "gain": 0.0
+    },
+    "bass vca": {
+      "gain": 0.0
+    },
+    "arp vca": {
+      "gain": 0.0
+    },
+    "lead vca": {
+      "gain": 0.0
+    },
+    "drone vca": {
+      "gain": 0.0
+    },
+    "lead delay": {
+      "feedback": 0.35,
+      "mix": 0.25
+    },
+    "drums mix": {
+      "level 1": 1.0,
+      "level 2": 0.7,
+      "level 3": 0.35
+    },
+    "music mix": {
+      "level 1": 0.6,
+      "level 2": 0.35,
+      "level 3": 0.5,
+      "level 4": 0.35
+    },
+    "master": {
+      "volume": 0.6
+    }
+  },
+  "cables": [
+    {
+      "from": "clock",
+      "output": "bar",
+      "to": "song",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "bar",
+      "to": "chords seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "bass seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "16th",
+      "to": "arp seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "lead seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "beat",
+      "to": "kick seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "beat",
+      "to": "snare seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "hats seq",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "dotted 8th",
+      "to": "lead delay",
+      "input": "clock"
+    },
+    {
+      "from": "song",
+      "output": "section 2",
+      "to": "kick seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "kick seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "kick seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "snare seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "snare seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 2",
+      "to": "hats seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "hats seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "hats seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 2",
+      "to": "bass seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "bass seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "bass seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 1",
+      "to": "arp seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 2",
+      "to": "arp seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "arp seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "arp seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 6",
+      "to": "arp seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 3",
+      "to": "lead seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 4",
+      "to": "lead seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "lead seq",
+      "input": "run cv"
+    },
+    {
+      "from": "song",
+      "output": "section 1",
+      "to": "drone vca",
+      "input": "mod"
+    },
+    {
+      "from": "song",
+      "output": "section 4",
+      "to": "drone vca",
+      "input": "mod"
+    },
+    {
+      "from": "song",
+      "output": "section 6",
+      "to": "drone vca",
+      "input": "mod"
+    },
+    {
+      "from": "song",
+      "output": "section 5",
+      "to": "lift",
+      "input": "a"
+    },
+    {
+      "from": "lift",
+      "output": "a",
+      "to": "lead osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "chords seq",
+      "output": "cv",
+      "to": "bass osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "chords seq",
+      "output": "cv",
+      "to": "arp osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "chords seq",
+      "output": "cv",
+      "to": "lead osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "chords seq",
+      "output": "cv",
+      "to": "drone osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "bass seq",
+      "output": "cv",
+      "to": "bass osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "arp seq",
+      "output": "cv",
+      "to": "arp osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "lead seq",
+      "output": "cv",
+      "to": "lead osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "kick seq",
+      "output": "gate",
+      "to": "kick env",
+      "input": "gate"
+    },
+    {
+      "from": "kick env",
+      "output": "env",
+      "to": "kick osc",
+      "input": "fm"
+    },
+    {
+      "from": "kick env",
+      "output": "env",
+      "to": "kick vca",
+      "input": "mod"
+    },
+    {
+      "from": "kick osc",
+      "output": "sine",
+      "to": "kick vca",
+      "input": "in"
+    },
+    {
+      "from": "snare seq",
+      "output": "cv",
+      "to": "snare hits",
+      "input": "a"
+    },
+    {
+      "from": "snare seq",
+      "output": "gate",
+      "to": "snare hits",
+      "input": "b"
+    },
+    {
+      "from": "snare hits",
+      "output": "and",
+      "to": "snare env",
+      "input": "gate"
+    },
+    {
+      "from": "noise",
+      "output": "white",
+      "to": "snare filter",
+      "input": "in"
+    },
+    {
+      "from": "snare filter",
+      "output": "bandpass",
+      "to": "snare vca",
+      "input": "in"
+    },
+    {
+      "from": "snare env",
+      "output": "env",
+      "to": "snare vca",
+      "input": "mod"
+    },
+    {
+      "from": "hats seq",
+      "output": "gate",
+      "to": "hats env",
+      "input": "gate"
+    },
+    {
+      "from": "noise",
+      "output": "white",
+      "to": "hats filter",
+      "input": "in"
+    },
+    {
+      "from": "hats filter",
+      "output": "highpass",
+      "to": "hats vca",
+      "input": "in"
+    },
+    {
+      "from": "hats env",
+      "output": "env",
+      "to": "hats vca",
+      "input": "mod"
+    },
+    {
+      "from": "bass seq",
+      "output": "gate",
+      "to": "bass env",
+      "input": "gate"
+    },
+    {
+      "from": "bass osc",
+      "output": "square",
+      "to": "bass filter",
+      "input": "in"
+    },
+    {
+      "from": "bass filter",
+      "output": "lowpass",
+      "to": "bass vca",
+      "input": "in"
+    },
+    {
+      "from": "bass env",
+      "output": "env",
+      "to": "bass vca",
+      "input": "mod"
+    },
+    {
+      "from": "arp seq",
+      "output": "gate",
+      "to": "arp env",
+      "input": "gate"
+    },
+    {
+      "from": "arp osc",
+      "output": "square",
+      "to": "arp vca",
+      "input": "in"
+    },
+    {
+      "from": "arp env",
+      "output": "env",
+      "to": "arp vca",
+      "input": "mod"
+    },
+    {
+      "from": "lead seq",
+      "output": "gate",
+      "to": "lead env",
+      "input": "gate"
+    },
+    {
+      "from": "lead osc",
+      "output": "square",
+      "to": "lead vca",
+      "input": "in"
+    },
+    {
+      "from": "lead env",
+      "output": "env",
+      "to": "lead vca",
+      "input": "mod"
+    },
+    {
+      "from": "lead vca",
+      "output": "out",
+      "to": "lead delay",
+      "input": "in"
+    },
+    {
+      "from": "drone osc",
+      "output": "saw",
+      "to": "drone filter",
+      "input": "in"
+    },
+    {
+      "from": "drone filter",
+      "output": "lowpass",
+      "to": "drone vca",
+      "input": "in"
+    },
+    {
+      "from": "kick vca",
+      "output": "out",
+      "to": "drums mix",
+      "input": "1"
+    },
+    {
+      "from": "snare vca",
+      "output": "out",
+      "to": "drums mix",
+      "input": "2"
+    },
+    {
+      "from": "hats vca",
+      "output": "out",
+      "to": "drums mix",
+      "input": "3"
+    },
+    {
+      "from": "bass vca",
+      "output": "out",
+      "to": "music mix",
+      "input": "1"
+    },
+    {
+      "from": "arp vca",
+      "output": "out",
+      "to": "music mix",
+      "input": "2"
+    },
+    {
+      "from": "lead delay",
+      "output": "out",
+      "to": "music mix",
+      "input": "3"
+    },
+    {
+      "from": "drone vca",
+      "output": "out",
+      "to": "music mix",
+      "input": "4"
+    },
+    {
+      "from": "drums mix",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    },
+    {
+      "from": "music mix",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    }
+  ]
+}
