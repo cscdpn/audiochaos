@@ -306,7 +306,8 @@ and removed, still load: they get the old fixed rack. The built-in presets
 live in `presets/` in the same format and are compiled into the binary. `just run path/to/patch.json` starts on a patch
 file; an unknown module, knob or port is reported by name. Block positions
 from the graphical editor are saved under `positions`; the terminal UI
-ignores them.
+ignores them. A patch without them, as one written by hand, opens with its
+blocks arranged in columns.
 
 ### Modules
 

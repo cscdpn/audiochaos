@@ -439,6 +439,33 @@ fn no_label_runs_into_a_pin_or_another_label() {
 }
 
 #[test]
+fn a_patch_without_positions_is_arranged_by_the_real_sizes_of_its_blocks() {
+    // A clock block is wider than the default layout guesses.
+    let patch = presets::get("song").unwrap();
+    let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
+    let (_, controller) = Engine::new(graph, out, 1024);
+    let mut editor = Editor::new(controller, Context::new(48_000.0), &BTreeMap::new());
+    let ctx = egui::Context::default();
+    paint(&mut editor, &ctx, vec![]);
+    paint(&mut editor, &ctx, vec![]);
+    let rects: Vec<Rect> = editor
+        .snarl
+        .node_ids()
+        .map(|(block, _)| {
+            Rect::from_min_size(
+                editor.snarl.get_node_info(block).unwrap().pos,
+                editor.sizes[&block],
+            )
+        })
+        .collect();
+    for (i, a) in rects.iter().enumerate() {
+        for b in &rects[i + 1..] {
+            assert!(!a.intersects(*b), "{a:?} overlaps {b:?}");
+        }
+    }
+}
+
+#[test]
 fn the_menu_of_a_knob_resets_it_in_the_playing_patch() {
     use egui::PointerButton::{Primary, Secondary};
 

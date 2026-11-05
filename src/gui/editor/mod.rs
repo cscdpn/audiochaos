@@ -47,6 +47,10 @@ pub struct Editor {
     sizes: HashMap<BlockId, Vec2>,
     /// Set by `arrange`, so the next frame brings the blocks into view.
     show_origin: bool,
+    /// Set for a patch without block positions, as a generated one: the
+    /// default layout guesses block sizes, and some blocks are wider than
+    /// guessed, so once drawn they are arranged by their real sizes.
+    arrange_once_drawn: bool,
     /// Each clock's Tap button.
     taps: HashMap<NodeId, Tap>,
     /// From graph to screen coordinates, as last drawn.
@@ -71,6 +75,7 @@ impl Editor {
             snarl: Snarl::new(),
             sizes: HashMap::new(),
             show_origin: false,
+            arrange_once_drawn: false,
             taps: HashMap::new(),
             to_global: TSTransform::IDENTITY,
             view: Rect::ZERO,
@@ -85,6 +90,7 @@ impl Editor {
     /// from `positions` get the default layout.
     fn rebuild(&mut self, positions: &BTreeMap<String, [f32; 2]>) {
         let layout = default_layout(&self.controller);
+        self.arrange_once_drawn = positions.is_empty();
         self.snarl = Snarl::new();
         self.sizes.clear();
         for (node, default) in self.controller.nodes().iter().zip(layout) {
@@ -339,6 +345,12 @@ impl Editor {
                 ..SnarlStyle::new()
             })
             .show(&mut self.snarl, &mut viewer, ui);
+        // A pass egui discards measures new blocks, and their sizes are
+        // not final until a pass it shows.
+        if self.arrange_once_drawn && !ui.ctx().will_discard() {
+            self.arrange_once_drawn = false;
+            self.arrange();
+        }
         self.disconnect_cables_without_wires();
         if let Some(blocks) = self.to_duplicate.take() {
             self.duplicate(&blocks);
