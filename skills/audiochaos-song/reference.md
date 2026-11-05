@@ -33,22 +33,23 @@ Eight-step CV sequencer, on its own clock or stepped by `clock`. `run` starts an
   - `step 8`: -1..1, default 0. This step's CV, ±1.
   - `run`: 0..1, default 1. Plays past halfway, stops below. Starting again starts from the first step. With the knob at 0, a gate or another seq's `cv` in `run cv` starts and stops it.
 
+## notes
+
+Melodies by note, in patterns A to D drawn on a grid: a step per tick on `clock`. `play` picks the pattern, as a song's track gives it: 0 stops, 1 plays A, 2 B... Unplugged, it plays A. `pitch` into an oscillator's `freq cv`, with `freq` on middle C (261.63 Hz).
+
+- inputs: `clock`, `play`
+- outputs: `pitch` (note, for freq cv), `gate` (0 or 1)
+- knobs:
+  - `rate`: 0.1..50 st/s, default 4. Steps per second. Ignored while `clock` has a cable.
+
 ## song
 
-Arranges a whole piece in up to eight sections, counting bars on `clock` (a clock's `bar`). Each section's gate is high while it plays: into a seq's `run cv` or a VCA's `mod`, it brings an instrument in and out.
+Arranges a whole piece: sections played one after the other, each so many bars long on `clock` (a clock's `bar`), and in each, which tracks play. A track's output is 1 while it plays pattern A, 2 for B..., 0 when silent: into a `notes` module's `play`, a seq's `run cv` or a VCA's `mod`.
 
 - inputs: `clock`
-- outputs: `section 1` (0 or 1), `section 2` (0 or 1), `section 3` (0 or 1), `section 4` (0 or 1), `section 5` (0 or 1), `section 6` (0 or 1), `section 7` (0 or 1), `section 8` (0 or 1)
+- outputs: `track 1` (0, or pattern 1..4), `track 2` (0, or pattern 1..4), `track 3` (0, or pattern 1..4), `track 4` (0, or pattern 1..4), `track 5` (0, or pattern 1..4), `track 6` (0, or pattern 1..4), `track 7` (0, or pattern 1..4), `track 8` (0, or pattern 1..4)
 - knobs:
-  - `length 1`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 2`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 3`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 4`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 5`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 6`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 7`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `length 8`: 0..64 bars, default 4. How many bars this section lasts, rounded. At 0 the song skips it.
-  - `loop`: 0..1, default 0. Past halfway, the song starts over after its last section. Below, it ends there and every gate closes.
+  - `loop`: 0..1, default 0. Past halfway, the song starts over after its last section. Below, it ends there and every track falls silent.
 
 ## lfo
 

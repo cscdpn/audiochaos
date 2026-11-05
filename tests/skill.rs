@@ -5,8 +5,8 @@
 use std::fmt::Write;
 use std::path::Path;
 
-use audiochaos::engine::param::Scale;
-use audiochaos::modules::{self, Context, master, oscillator};
+use audiochaos::engine::score::SCALES;
+use audiochaos::modules::{self, Context, master};
 use audiochaos::patch::Patch;
 
 const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/skills/audiochaos-song");
@@ -80,31 +80,16 @@ fn the_module_reference_is_up_to_date() {
 }
 
 #[test]
-fn the_table_of_notes_matches_the_oscillator() {
-    // A CV of 1 sweeps the whole `freq` knob, exponentially.
-    let freq = &oscillator::INFO.params[oscillator::FREQ];
-    assert_eq!(freq.scale, Scale::Exponential);
-    let per_semitone = 1.0 / (12.0 * (freq.max / freq.min).log2());
+fn the_scales_listed_are_the_ones_there_are() {
     let skill = std::fs::read_to_string(Path::new(DIR).join("SKILL.md")).unwrap();
-    let rows: Vec<(f32, f32)> = skill
-        .lines()
-        .filter_map(|line| {
-            let cells: Vec<&str> = line.split('|').map(str::trim).collect();
-            match cells[..] {
-                ["", semitones, value, ""] => Some((semitones.parse().ok()?, value.parse().ok()?)),
-                _ => None,
-            }
-        })
-        .collect();
-    assert!(rows.len() > 10, "the table is gone");
-    for (semitones, value) in rows {
-        let expected = semitones * per_semitone;
-        assert!(
-            (value - expected).abs() < 6e-5,
-            "{semitones}: {value}, not {expected}"
-        );
-    }
-    assert!(skill.contains(&format!("semitones × {:.5}", per_semitone)));
+    // Wrapped over several lines there.
+    let skill = skill.split_whitespace().collect::<Vec<_>>().join(" ");
+    let names: Vec<&str> = SCALES.iter().map(|(name, _)| *name).collect();
+    assert!(
+        skill.contains(&format!("one of these scales: {}.", names.join(", "))),
+        "SKILL.md should list: {}",
+        names.join(", ")
+    );
 }
 
 #[test]
