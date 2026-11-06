@@ -270,9 +270,9 @@ impl Plugin for Audiochaos {
             } else {
                 [0.0; 2]
             };
-            let sample = self.engine.next_sample_after(input, &self.input);
-            for s in samples {
-                *s = sample;
+            let frame = self.engine.next_frame_after(input, &self.input);
+            for (s, value) in samples.into_iter().zip(frame) {
+                *s = value;
             }
         }
         // Events timed past the buffer, if a host sends any.
@@ -311,11 +311,12 @@ nice_export_vst3!(Audiochaos);
 mod tests {
     use super::*;
 
-    /// One second of output, with no audio coming in.
+    /// One second of output, left and right interleaved, with no audio
+    /// coming in.
     fn play(plugin: &mut Audiochaos) -> Vec<f32> {
         let frames = plugin.sample_rate as usize;
         (0..frames)
-            .map(|_| plugin.engine.next_sample_after([0.0; 2], &plugin.input))
+            .flat_map(|_| plugin.engine.next_frame_after([0.0; 2], &plugin.input))
             .collect()
     }
 

@@ -93,7 +93,7 @@ fn playing_any_preset_with_notes_and_knobs_never_allocates() {
                     }
                     _ => {}
                 }
-                engine.next_sample();
+                engine.next_frame();
             }
         });
         assert_eq!(allocations, 0, "{name}");
@@ -108,7 +108,7 @@ fn live_edits_never_allocate_on_the_audio_side() {
     let run = |engine: &mut Engine| {
         allocations_in(|| {
             (0..SECOND / 10).for_each(|_| {
-                engine.next_sample();
+                engine.next_frame();
             })
         })
     };
@@ -162,7 +162,7 @@ fn the_sound_cards_input_never_allocates() {
             // The input callback, then the output callback.
             capture.push(&frames, 2);
             for _ in 0..256 {
-                engine.next_sample();
+                engine.next_frame();
             }
         }
     });

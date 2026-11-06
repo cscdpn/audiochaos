@@ -348,6 +348,20 @@ fn a_restored_patch_is_the_one_that_plays() {
 }
 
 #[test]
+fn a_panned_patch_plays_in_stereo() {
+    let instance = Instance::new();
+    instance.load_patch(&presets::get("stereo").unwrap());
+    let (mut left, mut right) = (Vec::new(), Vec::new());
+    for _ in 0..(SAMPLE_RATE as usize).div_ceil(MAX_FRAMES as usize) {
+        let (l, r) = instance.process(&[], None, MAX_FRAMES as usize);
+        left.extend(l);
+        right.extend(r);
+    }
+    assert!(loudest(&left) > 0.1 && loudest(&right) > 0.1);
+    assert_ne!(left, right);
+}
+
+#[test]
 fn clocks_follow_the_songs_tempo_and_bars() {
     let instance = Instance::new();
     // A saw let through on each beat of a clock whose knob says 120 BPM.

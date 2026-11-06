@@ -113,7 +113,7 @@ fn random_patches_stay_finite_and_bounded() {
         for _ in 0..4 * 48_000 / BLOCK {
             g.process();
             assert!(
-                g.output(out, master::OUT).iter().all(|s| s.abs() <= 1.0),
+                g.outputs(out).iter().flatten().all(|s| s.abs() <= 1.0),
                 "seed {seed}: master out of bounds"
             );
             for &node in &nodes {
@@ -150,7 +150,7 @@ fn self_feeding_loops_through_every_processor_stay_finite() {
             g.set_param(node, p, info.max);
         }
     }
-    let audio = g.render(out, master::OUT, 5 * 48_000);
+    let audio = g.render(out, master::OUT_LEFT, 5 * 48_000);
     assert!(audio.iter().all(|s| s.is_finite() && s.abs() <= 1.0));
     for &node in &nodes {
         assert!(g.outputs(node).iter().flatten().all(|s| s.is_finite()));
@@ -201,8 +201,8 @@ fn editing_the_patch_while_it_plays_stays_consistent() {
             }
         }
         for _ in 0..rng.below(3) * BLOCK {
-            let sample = engine.next_sample();
-            assert!(sample.is_finite() && sample.abs() <= 1.0);
+            let frame = engine.next_frame();
+            assert!(frame.iter().all(|s| s.is_finite() && s.abs() <= 1.0));
         }
     }
     let saved = patch::Patch::from_controller(&controller);

@@ -113,6 +113,11 @@ up. Everything else follows from it:
   infinity and a single non-finite sample poisons a filter's state for good.
 - The master soft-clips with `tanh` and mutes non-finite samples, so the
   speakers never see an exploded patch.
+- Only the master is stereo: its `left` and `right` outputs are what the
+  engine hands out, a frame at a time, and `pan` feeds them. Cables stay
+  one signal each and every other module mono, so stereo cost two outputs
+  and three inputs instead of a second channel in every buffer and module.
+  A mono patch still goes into `in`, which both sides share.
 - A `clock` input changes how a module behaves only while a cable is in it:
   the graph tells modules when an input gains or loses its last cable, since
   an unplugged input reads the same zeros as a silent one.

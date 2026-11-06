@@ -3,7 +3,7 @@
 use crate::patch::Patch;
 
 /// In the same JSON format as saved patches. The first one is the default.
-const PRESETS: [(&str, &str); 7] = [
+const PRESETS: [(&str, &str); 8] = [
     ("chaos", include_str!("../presets/chaos.json")),
     ("bass", include_str!("../presets/bass.json")),
     ("groovygroove", include_str!("../presets/groovygroove.json")),
@@ -11,6 +11,7 @@ const PRESETS: [(&str, &str); 7] = [
     ("chords", include_str!("../presets/chords.json")),
     ("looper", include_str!("../presets/looper.json")),
     ("song", include_str!("../presets/song.json")),
+    ("stereo", include_str!("../presets/stereo.json")),
 ];
 
 pub fn names() -> impl Iterator<Item = &'static str> {
@@ -40,7 +41,7 @@ mod tests {
 
     fn render(preset_name: &str, seconds: usize) -> Vec<f32> {
         let (mut g, out) = get(preset_name).unwrap().build(&Context::new(SR)).unwrap();
-        g.render(out, master::OUT, seconds * SR as usize)
+        g.render(out, master::OUT_LEFT, seconds * SR as usize)
     }
 
     /// 100 ms windows.
@@ -77,15 +78,15 @@ mod tests {
         use crate::midi::Parser;
         let context = Context::new(SR);
         let (mut g, out) = get("keys").unwrap().build(&context).unwrap();
-        assert!(rms(&g.render(out, master::OUT, SR as usize)) < 1e-3);
+        assert!(rms(&g.render(out, master::OUT_LEFT, SR as usize)) < 1e-3);
         let mut parser = Parser::default();
         parser.handle(&[0x90, 60, 100], &context.midi);
-        let played = rms(&g.render(out, master::OUT, SR as usize));
+        let played = rms(&g.render(out, master::OUT_LEFT, SR as usize));
         assert!(played > 0.05, "keys {played}");
         parser.handle(&[0x80, 60, 0], &context.midi);
         parser.handle(&[0x99, 36, 100], &context.midi);
         assert!(
-            rms(&g.render(out, master::OUT, SR as usize)) > 0.05,
+            rms(&g.render(out, master::OUT_LEFT, SR as usize)) > 0.05,
             "pad 1"
         );
     }
@@ -95,14 +96,14 @@ mod tests {
         use crate::midi::Parser;
         let context = Context::new(SR);
         let (mut g, out) = get("chords").unwrap().build(&context).unwrap();
-        assert!(rms(&g.render(out, master::OUT, SR as usize)) < 1e-3);
+        assert!(rms(&g.render(out, master::OUT_LEFT, SR as usize)) < 1e-3);
         let mut parser = Parser::default();
         parser.handle(&[0x90, 60, 100], &context.midi);
-        let one = rms(&g.render(out, master::OUT, SR as usize));
+        let one = rms(&g.render(out, master::OUT_LEFT, SR as usize));
         for note in [64, 67] {
             parser.handle(&[0x90, note, 100], &context.midi);
         }
-        let three = rms(&g.render(out, master::OUT, SR as usize));
+        let three = rms(&g.render(out, master::OUT_LEFT, SR as usize));
         assert!(one > 0.02, "one note {one}");
         assert!(
             three > 1.3 * one,
@@ -124,8 +125,8 @@ mod tests {
             parser.handle(&[0x80, note, 0], &context.midi);
         }
         // The release lasts 0.8 s.
-        g.render(out, master::OUT, SR as usize);
-        assert!(rms(&g.render(out, master::OUT, SR as usize / 10)) < 1e-3);
+        g.render(out, master::OUT_LEFT, SR as usize);
+        assert!(rms(&g.render(out, master::OUT_LEFT, SR as usize / 10)) < 1e-3);
     }
 
     #[test]
@@ -154,7 +155,7 @@ mod tests {
                 t += BLOCK;
                 capture.push(&frames, 2);
                 feed.next_block();
-                audio.extend(g.render(out, master::OUT, BLOCK));
+                audio.extend(g.render(out, master::OUT_LEFT, BLOCK));
             }
             audio
         };
@@ -214,6 +215,31 @@ mod tests {
                 assert_eq!(heard, playing[k], "bar {n}, {}: {}", names[k], energy[k]);
             }
         }
+    }
+
+    #[test]
+    fn stereo_swings_from_one_side_to_the_other() {
+        use crate::engine::module::BLOCK;
+
+        let (mut g, out) = get("stereo").unwrap().build(&Context::new(SR)).unwrap();
+        // Left and right loudness in half-second windows over 10 s, two
+        // turns of the LFO.
+        let window = SR as usize / 2 / BLOCK;
+        let mut balance = Vec::new();
+        for _ in 0..20 {
+            let mut energy = [0.0_f32; 2];
+            for _ in 0..window {
+                g.process();
+                for (e, side) in energy.iter_mut().zip(g.outputs(out)) {
+                    *e += side.iter().map(|s| s * s).sum::<f32>();
+                }
+            }
+            assert!(energy.iter().all(|&e| e > 1.0), "both sides play");
+            balance.push(energy[0] / energy[1]);
+        }
+        let most = |cmp: fn(f32, f32) -> f32| balance.iter().copied().reduce(cmp).unwrap();
+        assert!(most(f32::max) > 1.1, "never left: {balance:?}");
+        assert!(most(f32::min) < 0.9, "never right: {balance:?}");
     }
 
     #[test]

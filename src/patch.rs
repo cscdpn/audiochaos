@@ -1065,7 +1065,10 @@ mod tests {
             Patch::from_graph(&g).modules[0].file.as_deref(),
             Some(&*path)
         );
-        assert!(g.render(out, master::OUT, 4800)[4000] > 0.1, "it plays");
+        assert!(
+            g.render(out, master::OUT_LEFT, 4800)[4000] > 0.1,
+            "it plays"
+        );
 
         let (_engine, mut controller) = Engine::new(graph(), NodeId(1), 64);
         assert!(
@@ -1091,7 +1094,11 @@ mod tests {
             problems[0].starts_with("cannot load /nowhere/kick.wav: "),
             "{problems:?}"
         );
-        assert!(g.render(out, master::OUT, 4800).iter().all(|&s| s == 0.0));
+        assert!(
+            g.render(out, master::OUT_LEFT, 4800)
+                .iter()
+                .all(|&s| s == 0.0)
+        );
         assert_eq!(
             Patch::from_graph(&g).modules[0].file.as_deref(),
             Some("/nowhere/kick.wav"),

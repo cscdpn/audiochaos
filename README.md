@@ -18,7 +18,8 @@ MIDI controller (see [MIDI controllers](#midi-controllers)), and `just run
 chords` too, four notes at once (see [Chords](#chords)). `just run looper`
 records the sound card's input and loops it (see [Audio input and
 looper](#audio-input-and-looper)). `just run song` plays a whole short piece,
-instruments coming in and out over seven sections (see [Songs](#songs)).
+instruments coming in and out over seven sections (see [Songs](#songs)), and
+`just run stereo` moves sounds between the speakers (see [Stereo](#stereo)).
 
 ### Graphical editor
 
@@ -152,7 +153,7 @@ real time, at 48 kHz:
 just run --render out.wav --seconds 60 bass
 ```
 
-Files are mono 16-bit WAV, which plays anywhere; the master never leaves
+Files are stereo 16-bit WAV, which plays anywhere; the master never leaves
 -1..1, so 16 bits lose nothing audible. Neither way overwrites an existing
 file.
 
@@ -346,7 +347,8 @@ Module types, as patches and the editor's palette name them:
 | univibe | staggered stages swept by a lagging lamp: a lopsided throb |
 | vca | `out = in * (gain + mod)`, ring modulator when `mod` is audio |
 | mix | four inputs summed, each at its own level |
-| master | volume and soft limiter, the only thing the speakers hear |
+| pan | places a sound between the speakers, `left` and `right` outputs (see [Stereo](#stereo)) |
+| master | volume and soft limiter, the only thing the speakers hear, `in` on both speakers or `left` and `right` |
 
 Some starting points for noise: patch an oscillator into its own `fm`, feed
 the delay back into an oscillator's `fm`, push filter resonance to the max,
@@ -480,6 +482,23 @@ format with instrument templates and the notes of common keys,
 from the code), and `example.json` is a song in four sections. It fits in
 the context of a small local model, around 8,000 tokens in all, and needs
 nothing else from this repository.
+
+### Stereo
+
+The master has three inputs: what goes into `in` plays on both speakers, as
+in a mono patch, and `left` and `right` each feed one. A `pan` block places
+a sound between them: patch its `left` and `right` outputs into the
+master's, and turn `pan` from -1 (left) to 1 (right). It keeps the loudness
+the same wherever the sound is, so in the centre each side gets 0.71 of it,
+3 dB down, as in a DAW's mixer. An LFO into `pan cv`, through an `atten` to
+keep the swing gentle, moves the sound around.
+
+Several `pan` blocks can go into the master's `left` and `right` at once,
+since cables into one input add up: no stereo mixer needed. Everything else
+stays mono, effects included; for width, send a sound into two delays of
+different times, one into each side. `just run stereo` does all of this:
+hats circling between the speakers, a kick in the middle and a lead echoing
+left and right.
 
 ## How it works
 

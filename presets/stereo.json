@@ -1,0 +1,355 @@
+{
+  "version": 2,
+  "description": "Hats circling between the speakers, a kick in the middle and a lead echoing left and right: a tour of the stereo.",
+  "modules": [
+    {
+      "name": "clock",
+      "type": "clock"
+    },
+    {
+      "name": "kick seq",
+      "type": "seq"
+    },
+    {
+      "name": "hats seq",
+      "type": "seq"
+    },
+    {
+      "name": "lead",
+      "type": "notes",
+      "key": "A minor",
+      "patterns": {
+        "A": "A3 . C4 E4 . A4 G4 . E4 . D4 C4 . E4 - ."
+      }
+    },
+    {
+      "name": "lfo",
+      "type": "lfo"
+    },
+    {
+      "name": "kick env",
+      "type": "adsr"
+    },
+    {
+      "name": "hats env",
+      "type": "adsr"
+    },
+    {
+      "name": "lead env",
+      "type": "adsr"
+    },
+    {
+      "name": "noise",
+      "type": "noise"
+    },
+    {
+      "name": "kick osc",
+      "type": "osc"
+    },
+    {
+      "name": "lead osc",
+      "type": "osc"
+    },
+    {
+      "name": "hats filter",
+      "type": "filter"
+    },
+    {
+      "name": "kick vca",
+      "type": "vca"
+    },
+    {
+      "name": "hats vca",
+      "type": "vca"
+    },
+    {
+      "name": "lead vca",
+      "type": "vca"
+    },
+    {
+      "name": "atten",
+      "type": "atten"
+    },
+    {
+      "name": "hats pan",
+      "type": "pan"
+    },
+    {
+      "name": "echo left",
+      "type": "delay"
+    },
+    {
+      "name": "echo right",
+      "type": "delay"
+    },
+    {
+      "name": "master",
+      "type": "master"
+    }
+  ],
+  "knobs": {
+    "atten": {
+      "gain a": 0.45,
+      "gain b": 1.0,
+      "gain c": 0.3
+    },
+    "clock": {
+      "tempo": 112.0
+    },
+    "echo left": {
+      "feedback": 0.45,
+      "mix": 0.5,
+      "time": 0.25
+    },
+    "echo right": {
+      "feedback": 0.45,
+      "mix": 0.5,
+      "time": 0.25
+    },
+    "hats env": {
+      "attack": 0.001,
+      "decay": 0.04,
+      "release": 0.03,
+      "sustain": 0.0
+    },
+    "hats filter": {
+      "cutoff": 7000.0,
+      "resonance": 0.2
+    },
+    "hats pan": {
+      "pan": 0.0
+    },
+    "hats seq": {
+      "rate": 4.0,
+      "run": 1.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.0,
+      "step 4": 0.0,
+      "step 5": 0.0,
+      "step 6": 0.0,
+      "step 7": 0.0,
+      "step 8": 0.0
+    },
+    "hats vca": {
+      "gain": 0.0
+    },
+    "kick env": {
+      "attack": 0.001,
+      "decay": 0.2,
+      "release": 0.1,
+      "sustain": 0.0
+    },
+    "kick osc": {
+      "fm depth": 120.0,
+      "freq": 45.0
+    },
+    "kick seq": {
+      "rate": 4.0,
+      "run": 1.0,
+      "step 1": 0.0,
+      "step 2": 0.0,
+      "step 3": 0.0,
+      "step 4": 0.0,
+      "step 5": 0.0,
+      "step 6": 0.0,
+      "step 7": 0.0,
+      "step 8": 0.0
+    },
+    "kick vca": {
+      "gain": 0.0
+    },
+    "lead": {
+      "rate": 4.0
+    },
+    "lead env": {
+      "attack": 0.005,
+      "decay": 0.2,
+      "release": 0.15,
+      "sustain": 0.4
+    },
+    "lead osc": {
+      "fm depth": 100.0,
+      "freq": 261.63
+    },
+    "lead vca": {
+      "gain": 0.0
+    },
+    "lfo": {
+      "rate": 0.2
+    },
+    "master": {
+      "volume": 0.5
+    }
+  },
+  "cables": [
+    {
+      "from": "clock",
+      "output": "beat",
+      "to": "kick seq",
+      "input": "clock"
+    },
+    {
+      "from": "kick seq",
+      "output": "gate",
+      "to": "kick env",
+      "input": "gate"
+    },
+    {
+      "from": "kick env",
+      "output": "env",
+      "to": "kick osc",
+      "input": "fm"
+    },
+    {
+      "from": "kick env",
+      "output": "env",
+      "to": "kick vca",
+      "input": "mod"
+    },
+    {
+      "from": "kick osc",
+      "output": "sine",
+      "to": "kick vca",
+      "input": "in"
+    },
+    {
+      "from": "kick vca",
+      "output": "out",
+      "to": "master",
+      "input": "in"
+    },
+    {
+      "from": "clock",
+      "output": "16th",
+      "to": "hats seq",
+      "input": "clock"
+    },
+    {
+      "from": "hats seq",
+      "output": "gate",
+      "to": "hats env",
+      "input": "gate"
+    },
+    {
+      "from": "noise",
+      "output": "white",
+      "to": "hats filter",
+      "input": "in"
+    },
+    {
+      "from": "hats filter",
+      "output": "highpass",
+      "to": "hats vca",
+      "input": "in"
+    },
+    {
+      "from": "hats env",
+      "output": "env",
+      "to": "hats vca",
+      "input": "mod"
+    },
+    {
+      "from": "hats vca",
+      "output": "out",
+      "to": "hats pan",
+      "input": "in"
+    },
+    {
+      "from": "lfo",
+      "output": "sine",
+      "to": "atten",
+      "input": "a"
+    },
+    {
+      "from": "atten",
+      "output": "a",
+      "to": "hats pan",
+      "input": "pan cv"
+    },
+    {
+      "from": "hats pan",
+      "output": "left",
+      "to": "master",
+      "input": "left"
+    },
+    {
+      "from": "hats pan",
+      "output": "right",
+      "to": "master",
+      "input": "right"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "lead",
+      "input": "clock"
+    },
+    {
+      "from": "lead",
+      "output": "gate",
+      "to": "lead env",
+      "input": "gate"
+    },
+    {
+      "from": "lead",
+      "output": "pitch",
+      "to": "lead osc",
+      "input": "freq cv"
+    },
+    {
+      "from": "lead osc",
+      "output": "square",
+      "to": "lead vca",
+      "input": "in"
+    },
+    {
+      "from": "lead env",
+      "output": "env",
+      "to": "lead vca",
+      "input": "mod"
+    },
+    {
+      "from": "lead vca",
+      "output": "out",
+      "to": "atten",
+      "input": "c"
+    },
+    {
+      "from": "atten",
+      "output": "c",
+      "to": "echo left",
+      "input": "in"
+    },
+    {
+      "from": "atten",
+      "output": "c",
+      "to": "echo right",
+      "input": "in"
+    },
+    {
+      "from": "clock",
+      "output": "8th",
+      "to": "echo left",
+      "input": "clock"
+    },
+    {
+      "from": "clock",
+      "output": "dotted 8th",
+      "to": "echo right",
+      "input": "clock"
+    },
+    {
+      "from": "echo left",
+      "output": "out",
+      "to": "master",
+      "input": "left"
+    },
+    {
+      "from": "echo right",
+      "output": "out",
+      "to": "master",
+      "input": "right"
+    }
+  ]
+}

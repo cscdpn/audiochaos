@@ -11,19 +11,21 @@ wrong.
 The first release.
 
 ### Sound
-- 28 modules: sources (`osc`, `noise`, `lfo`, `seq`, `notes`, `clock`,
+- 29 modules: sources (`osc`, `noise`, `lfo`, `seq`, `notes`, `clock`,
   `adsr`, `sampler`, `looper`, `input`, `midi`, `poly`), processors
   (`filter`, `dist`, `crush`, `delay`, `chorus`, `flanger`, `phaser`,
-  `univibe`, `vca`, `mix`), control (`s&h`, `atten`, `invert`, `logic`),
-  the `song` arranger and the `master`.
+  `univibe`, `vca`, `mix`, `pan`), control (`s&h`, `atten`, `invert`,
+  `logic`), the `song` arranger and the `master`.
+- Stereo: `pan` places a sound between the speakers, into the master's
+  `left` and `right`; its `in` still plays on both.
 - Melodies by note name with `notes`: four patterns of up to 64 steps,
   drawn on a piano roll in the key of your choice among 23 scales.
 - Whole pieces in one patch with `song`: named sections, and eight tracks
   saying who plays which pattern in each, edited as a grid.
 - Every knob has a CV input; cables may feed back, with one block (64
   samples) of delay.
-- Seven presets: `chaos`, `bass`, `groovygroove`, `keys`, `chords`, `looper`,
-  and `song`, a whole short piece in sections.
+- Eight presets: `chaos`, `bass`, `groovygroove`, `keys`, `chords`, `looper`,
+  `song`, a whole short piece in sections, and `stereo`.
 - Patches as JSON files, block positions included; version 1 files load.
   Up to 256 modules and 1024 cables in a patch.
 - A skill in `skills/audiochaos-song` to have a language model, even a
@@ -37,7 +39,7 @@ The first release.
   start and stop each other.
 - Global Stop and Start, with a fade.
 - The sound card's input, and a live looper.
-- Live recording to WAV, and offline rendering with `--render`.
+- Live recording to stereo WAV, and offline rendering with `--render`.
 
 ### Editor
 - Node editor: blocks, wires, sliders with tooltips, lights that blink at

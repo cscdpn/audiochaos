@@ -21,7 +21,7 @@ when touching code the plugin uses, since it builds the library without the
 ## Rules
 
 - **The audio thread never allocates, frees, locks or waits.** That covers
-  `Module::process` and everything it calls, `Engine::next_sample` and the
+  `Module::process` and everything it calls, `Engine::next_frame` and the
   plugin's `process`. Allocate in constructors, on the UI thread; see
   [ARCHITECTURE.md](ARCHITECTURE.md#threads). `tests/realtime.rs` and the
   plugin's tests catch most mistakes, not all.

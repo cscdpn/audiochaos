@@ -104,7 +104,7 @@ fn a_refused_cable_draws_no_wire_and_says_why() {
     let (from, to) = (
         OutPinId {
             node: out,
-            output: master::OUT,
+            output: master::OUT_LEFT,
         },
         InPinId {
             node: out,
@@ -606,7 +606,7 @@ fn blocks_with_a_light_show_it_once_the_patch_plays() {
     assert!(!editor.moves());
 
     for _ in 0..crate::engine::module::BLOCK {
-        engine.next_sample();
+        engine.next_frame();
     }
     let shapes = paint(&mut editor, &ctx, vec![]);
     let lit: Vec<_> = editor
@@ -771,7 +771,7 @@ fn modulated_knobs_are_marked_once_the_patch_plays() {
     let mut editor = Editor::new(controller, Context::new(48_000.0), &patch.positions);
     // Past the knobs' glides.
     for _ in 0..48_000 {
-        engine.next_sample();
+        engine.next_frame();
     }
     let moved = editor
         .controller
@@ -810,7 +810,7 @@ fn a_modulated_knob_alone_keeps_the_editor_redrawing() {
     let editor = Editor::new(controller, Context::new(48_000.0), &patch.positions);
     assert!(!editor.moves());
     for _ in 0..crate::engine::module::BLOCK {
-        engine.next_sample();
+        engine.next_frame();
     }
     assert!(editor.moves());
 }

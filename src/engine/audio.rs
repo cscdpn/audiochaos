@@ -19,7 +19,7 @@ use cpal::{
     SupportedStreamConfig,
 };
 
-use super::control::Engine;
+use super::control::{Engine, Frame};
 use super::input::{self, Callbacks, Capture, LiveInput};
 use super::record::Tap;
 
@@ -402,11 +402,10 @@ fn output_stream<T: SizedSample + FromSample<f32>>(
         output.config,
         move |data: &mut [T], _| {
             callbacks.output_ran(data.len() / channels);
-            // The engine is mono: the same sample goes to every channel.
             for frame in data.chunks_mut(channels) {
-                let sample = engine.next_sample();
-                tap.push(sample);
-                frame.fill(T::from_sample(sample));
+                let played = engine.next_frame();
+                tap.push(played);
+                write_frame(frame, played);
             }
         },
         move |_| {
@@ -414,6 +413,20 @@ fn output_stream<T: SizedSample + FromSample<f32>>(
         },
         None,
     )
+}
+
+/// Left and right on the first two channels, further channels silent, and
+/// both mixed down on a mono device.
+fn write_frame<T: Sample + FromSample<f32>>(out: &mut [T], [left, right]: Frame) {
+    match out {
+        [mono] => *mono = T::from_sample((left + right) / 2.0),
+        [l, r, rest @ ..] => {
+            *l = T::from_sample(left);
+            *r = T::from_sample(right);
+            rest.fill(T::EQUILIBRIUM);
+        }
+        [] => {}
+    }
 }
 
 fn capture(
@@ -471,6 +484,19 @@ mod tests {
         assert_eq!(size(None), BufferSize::Default);
         assert_eq!(size(Some(1024)), BufferSize::Fixed(1024));
         assert_eq!(size(Some(128)), BufferSize::Default);
+    }
+
+    #[test]
+    fn frames_go_to_the_first_two_channels_or_mix_down_on_one() {
+        let mut stereo = [0.0_f32; 2];
+        write_frame(&mut stereo, [0.5, -0.5]);
+        assert_eq!(stereo, [0.5, -0.5]);
+        let mut surround = [1.0_f32; 4];
+        write_frame(&mut surround, [0.5, -0.5]);
+        assert_eq!(surround, [0.5, -0.5, 0.0, 0.0]);
+        let mut mono = [0_i16; 1];
+        write_frame(&mut mono, [0.5, 0.25]);
+        assert_eq!(mono, [i16::from_sample(0.375_f32)]);
     }
 
     #[test]

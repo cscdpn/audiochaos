@@ -29,6 +29,9 @@ pub const COMMAND_QUEUE_CAPACITY: usize = MAX_MODULES * (MAX_PARAMS + 3) + MAX_C
 /// stops: long enough to avoid a click, short enough to feel instant.
 const FADE_SECONDS: f32 = 0.01;
 
+/// What the speakers play at one instant: left, then right.
+pub type Frame = [f32; 2];
+
 enum Command {
     SetParam {
         node: NodeId,
@@ -398,7 +401,8 @@ pub struct Engine {
 }
 
 impl Engine {
-    /// `output` is the node whose port 0 goes to the speakers.
+    /// `output` is the node whose ports 0 and 1 go to the left and right
+    /// speakers: the master.
     pub fn new(graph: Graph, output: NodeId, queue_capacity: usize) -> (Self, Controller) {
         let (producer, consumer) = RingBuffer::new(queue_capacity);
         let (retired_producer, retired_consumer) = RingBuffer::new(queue_capacity);
@@ -436,7 +440,7 @@ impl Engine {
         self.input = Some(input);
     }
 
-    pub fn next_sample(&mut self) -> f32 {
+    pub fn next_frame(&mut self) -> Frame {
         let running = self.running.load(Ordering::Relaxed);
         if self.position == BLOCK {
             self.apply_commands();
@@ -455,20 +459,21 @@ impl Engine {
         } else {
             (self.level - self.fade_step).max(0.0)
         };
-        let sample = self.graph.output(self.output, 0)[self.position] * self.level;
+        let outputs = self.graph.outputs(self.output);
+        let frame = [0, 1].map(|side| outputs[side][self.position] * self.level);
         self.position += 1;
-        sample
+        frame
     }
 
-    /// Like `next_sample`, for a host that hands over each input frame along
+    /// Like `next_frame`, for a host that hands over each input frame along
     /// with the output frame it wants, as a DAW does: the frame goes into
     /// `live` for the next block, so the input comes out one block late, 64
     /// samples, however large the host's buffers. Written after computing,
     /// since computing a block reads the one before.
-    pub fn next_sample_after(&mut self, input: [f32; CHANNELS], live: &LiveInput) -> f32 {
-        let sample = self.next_sample();
+    pub fn next_frame_after(&mut self, input: [f32; CHANNELS], live: &LiveInput) -> Frame {
+        let frame = self.next_frame();
         live.write_frame(self.position - 1, input);
-        sample
+        frame
     }
 
     /// Every slot, so a freed one goes dark.
@@ -558,7 +563,7 @@ mod tests {
 
     fn run_block(engine: &mut Engine) {
         for _ in 0..BLOCK {
-            engine.next_sample();
+            engine.next_frame();
         }
     }
 
@@ -573,13 +578,13 @@ mod tests {
     #[test]
     fn param_changes_apply_at_the_next_block() {
         let (mut engine, mut controller, _, out) = engine(8);
-        engine.next_sample();
+        engine.next_frame();
         controller.set_param(out, master::VOLUME, 0.1).unwrap();
         for _ in 1..BLOCK {
-            engine.next_sample();
+            engine.next_frame();
             assert_eq!(engine.graph.param(out, master::VOLUME), 0.5);
         }
-        engine.next_sample();
+        engine.next_frame();
         assert!((engine.graph.param(out, master::VOLUME) - 0.1).abs() < 1e-6);
     }
 
@@ -636,16 +641,16 @@ mod tests {
         let (mut engine, controller) = Engine::new(graph, out, 8);
         let fade = (FADE_SECONDS * SR) as usize;
         for _ in 0..fade {
-            engine.next_sample();
+            engine.next_frame();
         }
         assert!(controller.running());
         controller.set_running(false);
-        let fading: Vec<f32> = (0..fade).map(|_| engine.next_sample()).collect();
+        let fading: Vec<f32> = (0..fade).map(|_| engine.next_frame()[0]).collect();
         assert!(fading[0].abs() > 0.01, "still heard at first");
         assert!(fading.windows(2).all(|w| w[1].abs() <= w[0].abs() + 1e-6));
         let held = engine.graph.output(lfo, lfo::OUT_SAW)[0];
         for _ in 0..10 * BLOCK {
-            assert_eq!(engine.next_sample(), 0.0);
+            assert_eq!(engine.next_frame(), [0.0; 2]);
         }
         assert_eq!(
             engine.graph.output(lfo, lfo::OUT_SAW)[0],
@@ -657,7 +662,7 @@ mod tests {
         run_block(&mut engine);
         let resumed = engine.graph.output(lfo, lfo::OUT_SAW)[0];
         assert!((resumed - held).abs() < 0.01, "{held} then {resumed}");
-        assert!(engine.next_sample().abs() > 0.0);
+        assert!(engine.next_frame()[0].abs() > 0.0);
     }
 
     #[test]
@@ -670,7 +675,7 @@ mod tests {
         let out = graph.add("master", Box::new(Master));
         let (mut engine, _controller) = Engine::new(graph, out, 8);
         for frame in 0..3 * BLOCK {
-            engine.next_sample_after([frame as f32, -(frame as f32)], &live);
+            engine.next_frame_after([frame as f32, -(frame as f32)], &live);
             let block = engine.graph.output(mic, 0);
             let heard = block[engine.position - 1];
             let expected = frame.saturating_sub(BLOCK) as f32;
@@ -751,7 +756,7 @@ mod tests {
                 to_port: master::IN,
             })
             .unwrap();
-        let samples: Vec<f32> = (0..4 * BLOCK).map(|_| engine.next_sample()).collect();
+        let samples: Vec<f32> = (0..4 * BLOCK).map(|_| engine.next_frame()[0]).collect();
         assert!(
             samples.iter().any(|&s| s.abs() > 0.1),
             "the new oscillator is heard"

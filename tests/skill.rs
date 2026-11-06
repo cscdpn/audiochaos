@@ -98,7 +98,7 @@ fn the_example_loads_and_plays() {
     let json = std::fs::read_to_string(Path::new(DIR).join("example.json")).unwrap();
     let patch = Patch::from_json(&json).unwrap();
     let (mut graph, out) = patch.build(&Context::new(SR)).unwrap();
-    let audio = graph.render(out, master::OUT, 10 * SR as usize);
+    let audio = graph.render(out, master::OUT_LEFT, 10 * SR as usize);
     let rms = (audio.iter().map(|s| s * s).sum::<f32>() / audio.len() as f32).sqrt();
     assert!(rms > 0.02, "rms {rms}");
 }
