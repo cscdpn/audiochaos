@@ -83,7 +83,7 @@ Work in this order, and write the plan down before the JSON.
 6. **Mix.** Instruments into a `mix` (4 inputs, `level 1` to `level 4`),
    the mix into the `master`. Kick loudest, hats and lead quieter. For more
    than four instruments, add a second `mix` and cable it into the
-   `master` `in` too.
+   `master` `in` too. Optional stereo: see "Stereo" below.
 7. **Write the JSON**, then check it against "Before you answer".
 
 ## The skeleton
@@ -182,6 +182,13 @@ cutoff 7000.0 and its `highpass` output into the VCA.
 0.3, decay 0.5, sustain 0.7, release 1.0, `saw` output, and steps held
 with `-`: `"A3 - - - F3 - - -"`.
 
+**Stereo**, optional: whatever goes into the `master` `in` plays on both
+speakers. To place an instrument to one side, cable its VCA `out` (or its
+delay `out`) into a `X pan` (pan) `in` instead of the mix, set `X pan` knob
+`pan` from -1.0 (left) to 1.0 (right), and cable `X pan` `left` →
+`master` `left` and `X pan` `right` → `master` `right`. Keep the kick and
+the bass in the mix, in the middle.
+
 More flavours, all in `reference.md`: `dist` (grit, after a VCA), `crush`,
 `chorus`, `phaser` on a lead or bass; an `lfo` into a filter's `cutoff cv`
 for movement.
@@ -220,7 +227,8 @@ Check each point:
   `modules`.
 - Every output, input and knob name is spelled as in `reference.md`; CV
   inputs end in ` cv`.
-- One `master`, and every instrument reaches it, through the `mix`.
+- One `master`, and every instrument reaches it, through the `mix` or
+  a `pan`.
 - `clock` `bar` goes into `song` `clock`.
 - Each string in `tracks` has one cell per section, and each `notes`
   module has a pattern for every letter its track uses.

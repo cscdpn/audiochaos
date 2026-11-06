@@ -231,11 +231,20 @@ Four inputs summed, each at its own level: voices into one sound, or a crossfade
   - `level 3`: 0..1, default 1. How much of this input goes into the mix.
   - `level 4`: 0..1, default 1. How much of this input goes into the mix.
 
-## master
+## pan
 
-The output: volume and a soft limiter, the only thing the speakers hear.
+Places a sound between the left and right speakers: its outputs go into the master's `left` and `right`. An LFO on `pan cv` moves it around.
 
 - inputs: `in`
-- outputs: `out` (to the speakers)
+- outputs: `left` (to the master's left), `right` (to the master's right)
+- knobs:
+  - `pan`: -1..1, default 0. -1 all left, 0 centre, 1 all right.
+
+## master
+
+The output: volume and a soft limiter, the only thing the speakers hear. `in` plays on both speakers, `left` and `right` on one each, from a `pan`.
+
+- inputs: `in`, `left`, `right`
+- outputs: `left` (to the left speaker), `right` (to the right speaker)
 - knobs:
   - `volume`: 0..1, default 0.5. Output level, before the soft limiter.
