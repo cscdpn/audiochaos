@@ -6,9 +6,33 @@ Notable changes, newest first. The format follows
 break patch files, which then fail to load with a message rather than load
 wrong.
 
-## [0.1.0] - unreleased
+## [0.1.0] - 2026-11-09
 
-The first release.
+The first release of audiochaos, a modular synthesizer for chaotic,
+aggressive sounds: blocks joined by cables in a node editor, as a program
+or as a VST3/CLAP instrument in a DAW. Feedback is allowed everywhere and
+the master limits the result, so patches can go wild without hurting ears
+or speakers.
+
+Each archive holds the program (`audiochaos`, or `audiochaos.exe`), the
+plugins (`audiochaos.vst3` and `audiochaos.clap`), the README and the
+licences:
+
+- Run the program on its own to hear the `chaos` preset, give it a preset
+  name (`audiochaos song`) or a patch file, or `--render out.wav --seconds
+  60` to write a file without a sound card. The **Patch** menu lists the
+  presets.
+- For the plugin, copy `audiochaos.vst3` to `~/.vst3` on Linux or to
+  `C:\Program Files\Common Files\VST3` on Windows, or `audiochaos.clap`
+  to `~/.clap` or `C:\Program Files\Common Files\CLAP`. Ardour only loads
+  VST3.
+- On Linux, the program needs ALSA and D-Bus, there on any desktop.
+
+Known limits: the plugin has been tried in a host on Linux only. Low
+latency on Windows needs ASIO, which these archives lack (its SDK licence
+would cover them): build with `--features asio`, as the README explains.
+The skill for language models lives in the repository, under
+`skills/audiochaos-song`.
 
 ### Sound
 - 29 modules: sources (`osc`, `noise`, `lfo`, `seq`, `notes`, `clock`,
