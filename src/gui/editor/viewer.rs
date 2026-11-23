@@ -22,13 +22,16 @@ use super::score::{self, NoteView};
 use super::snarl_id;
 use super::widgets::{AUDIO_PIN, CV_PIN, SLIDER_WIDTH, knob, led, switch, toggle};
 
+/// How far `arrange` zooms out at most: text stays readable.
+const MIN_ZOOM: f32 = 0.5;
+
 /// Draws blocks for egui-snarl and turns edits into controller calls.
 pub(super) struct Viewer<'a> {
     pub(super) controller: &'a mut Controller,
     pub(super) context: &'a Context,
     pub(super) status: &'a mut String,
     pub(super) sizes: &'a mut HashMap<BlockId, Vec2>,
-    pub(super) show_origin: &'a mut bool,
+    pub(super) show_origin: &'a mut Option<Vec2>,
     pub(super) taps: &'a mut HashMap<NodeId, Tap>,
     pub(super) note_views: &'a mut HashMap<NodeId, NoteView>,
     pub(super) to_global: &'a mut TSTransform,
@@ -224,10 +227,13 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         self.sizes.insert(block, rect.size());
     }
 
-    /// Shows the top left corner of the graph, where `arrange` starts, at the
-    /// current zoom.
+    /// Shows the graph from its top left corner, where `arrange` starts,
+    /// zoomed out to show all it reaches, unless that makes it unreadable.
     fn current_transform(&mut self, to_global: &mut TSTransform, _snarl: &mut Snarl<NodeId>) {
-        if std::mem::take(self.show_origin) {
+        if let Some(reach) = self.show_origin.take() {
+            let room = self.view.size() - Vec2::splat(2.0 * BLOCK_GAP);
+            let fit = (room / reach.max(Vec2::splat(1.0))).min_elem();
+            to_global.scaling = fit.clamp(MIN_ZOOM, 1.0);
             to_global.translation = self.view.min.to_vec2() + Vec2::splat(BLOCK_GAP);
         }
         *self.to_global = *to_global;

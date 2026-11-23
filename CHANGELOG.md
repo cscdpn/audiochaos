@@ -13,10 +13,14 @@ wrong.
 - `mute`, a kill switch for any two cables, such as a `pan`'s left and
   right; a mute switch on each input of `mix` and each track of `song`, in
   its grid.
+- Snap to grid in the editor, on by default.
+- Quit in the Patch menu, or Ctrl+Q.
 
 ### Changed
 
 - Knobs that are on or off, `run` and `loop`, are switches in the editor.
+- Arrange blocks follows the signal, each block right of what feeds it, and
+  orders columns to uncross wires; then zooms out to show the whole patch.
 
 ## [0.1.0] - 2026-11-09
 

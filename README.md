@@ -39,9 +39,16 @@ the knobs and switches for those that are on or off.
   when that is away from the slider's handle.
 - Right-click a slider to reset it (see [below](#knobs-and-cv)).
 - The canvas pans and zooms with the mouse.
-- **Patch** menu: load a built-in preset, **Arrange blocks** into columns
-  where none overlaps another, **Import…** a patch file, or **Export…** the
-  current patch, block positions included.
+- **Patch** menu: load a built-in preset, **Arrange blocks**, **Snap to
+  grid**, **Import…** a patch file, **Export…** the current patch, block
+  positions included, or **Quit** (Ctrl+Q).
+- **Arrange blocks** follows the signal: each block goes in a column right
+  of the blocks that feed it, the master last, and each column is ordered to
+  bring blocks level with what they connect to, which uncrosses most wires.
+  Feedback cables, from a block processed later, do not count. It then
+  zooms out to show the whole patch, down to half size.
+- With **Snap to grid**, on by default, blocks land on the grid when let
+  go.
 - Shift+click blocks, or Shift+drag around them, to select several; dragging
   one of them moves them all. **Ctrl+D**, or **Duplicate** in a block's menu,
   copies them just below with their knobs, sounds and the cables between
@@ -317,7 +324,7 @@ live in `presets/` in the same format and are compiled into the binary.
 knob, port or note is reported by name. Block positions
 from the graphical editor are saved under `positions`; the terminal UI
 ignores them. A patch without them, as one written by hand, opens with its
-blocks arranged in columns.
+blocks arranged as **Arrange blocks** does.
 
 ### Modules
 

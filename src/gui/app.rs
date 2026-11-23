@@ -76,9 +76,19 @@ impl eframe::App for GuiApp {
                 self.keyboard.handle(event, playing);
             }
         });
+        if ui.input_mut(|i| i.consume_key(egui::Modifiers::COMMAND, egui::Key::Q)) {
+            quit(ui.ctx());
+        }
         egui::Panel::top("menu").show(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("Patch", |ui| self.editor.patch_menu(ui));
+                ui.menu_button("Patch", |ui| {
+                    self.editor.patch_menu(ui);
+                    ui.separator();
+                    let button = egui::Button::new("Quit").shortcut_text("Ctrl+Q");
+                    if ui.add(button).clicked() {
+                        quit(ui.ctx());
+                    }
+                });
                 let audio = ui.menu_button("Audio", |ui| self.audio_menu(ui));
                 if audio.inner.is_none() {
                     // Closed: list the cards again next time, in case one
@@ -236,6 +246,12 @@ const LOW_LATENCY_HELP: &str = "Plays on the sound card directly, for less delay
 
 /// Callback sizes to pick from; `None` leaves it to the card.
 const BUFFERS: [Option<u32>; 6] = [None, Some(64), Some(128), Some(256), Some(512), Some(1024)];
+
+/// Closes the window as its close button would: a running recording is
+/// still finished.
+fn quit(ctx: &egui::Context) {
+    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+}
 
 /// `current`, if `devices` still has it: low latency may list other devices.
 fn kept(current: &Option<String>, devices: &[DeviceEntry]) -> Option<String> {

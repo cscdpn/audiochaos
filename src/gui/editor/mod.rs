@@ -14,7 +14,7 @@ use std::time::Duration;
 
 use egui::emath::TSTransform;
 use egui::{Pos2, Rect, Ui, Vec2};
-use egui_snarl::ui::{PinPlacement, SnarlStyle, SnarlWidget};
+use egui_snarl::ui::{BackgroundPattern, PinPlacement, SnarlStyle, SnarlWidget};
 use egui_snarl::{InPinId, NodeId as BlockId, OutPinId, Snarl};
 
 use crate::engine::control::Controller;
@@ -23,7 +23,7 @@ use crate::modules::Context;
 use crate::modules::clock::Tap;
 use crate::patch::Patch;
 
-use layout::{BLOCK_GAP, columns, default_layout, estimated_size};
+use layout::{BLOCK_GAP, GRID, columns, default_layout, estimated_size, flow, snapped};
 use score::NoteView;
 use viewer::Viewer;
 use widgets::marked;
@@ -47,8 +47,9 @@ pub struct Editor {
     snarl: Snarl<NodeId>,
     /// Each block's size as last drawn, to arrange them.
     sizes: HashMap<BlockId, Vec2>,
-    /// Set by `arrange`, so the next frame brings the blocks into view.
-    show_origin: bool,
+    /// Set by `arrange` to how far the blocks reach from the origin, so the
+    /// next frame brings them into view.
+    show_origin: Option<Vec2>,
     /// Set for a patch without block positions, as a generated one: the
     /// default layout guesses block sizes, and some blocks are wider than
     /// guessed, so once drawn they are arranged by their real sizes.
@@ -61,6 +62,8 @@ pub struct Editor {
     to_global: TSTransform,
     /// Where the graph is drawn, on screen.
     view: Rect,
+    /// Whether blocks land on the grid.
+    pub snap: bool,
     /// Blocks to copy, asked for from a block's menu while drawing.
     to_duplicate: Option<Vec<BlockId>>,
     /// The last thing worth telling the user, for the status bar.
@@ -78,12 +81,13 @@ impl Editor {
             context,
             snarl: Snarl::new(),
             sizes: HashMap::new(),
-            show_origin: false,
+            show_origin: None,
             arrange_once_drawn: false,
             taps: HashMap::new(),
             note_views: HashMap::new(),
             to_global: TSTransform::IDENTITY,
             view: Rect::ZERO,
+            snap: true,
             to_duplicate: None,
             status: String::new(),
         };
@@ -110,32 +114,44 @@ impl Editor {
         }
     }
 
-    /// Moves every block into columns where none overlaps another, the
-    /// master last, and brings them into view.
+    /// Moves every block into columns by signal flow, where none overlaps
+    /// another and few wires cross, the master last, and brings them into
+    /// view.
     pub fn arrange(&mut self) {
-        let output = self.controller.output();
-        let mut blocks: Vec<_> = self
+        let nodes = self.controller.nodes();
+        let index = |id: NodeId| nodes.iter().position(|n| n.id == id);
+        let blocks: Vec<BlockId> = nodes.iter().map(|n| block(&self.snarl, n.id)).collect();
+        let sizes: Vec<Vec2> = blocks.iter().map(|&b| self.size(b)).collect();
+        let cables: Vec<(usize, usize)> = self
             .controller
-            .nodes()
+            .cables()
             .iter()
-            .map(|n| (block(&self.snarl, n.id), n.id == output, n.info))
+            .filter_map(|c| Some((index(c.from)?, index(c.to)?)))
             .collect();
-        // Stable, so the others keep their processing order.
-        blocks.sort_by_key(|&(_, is_output, _)| is_output);
-        let sizes = blocks.iter().map(|&(block, _, info)| {
-            // Blocks not drawn yet, if any, are guessed.
-            self.sizes
-                .get(&block)
-                .copied()
-                .unwrap_or_else(|| estimated_size(info))
-        });
-        let layout = columns(sizes);
-        for (&(block, _, _), pos) in blocks.iter().zip(layout) {
+        let output = index(self.controller.output()).unwrap_or(nodes.len());
+        let layout = flow(&sizes, &cables, output);
+        let mut reach = Vec2::ZERO;
+        for ((&block, pos), size) in blocks.iter().zip(layout).zip(sizes) {
             if let Some(node) = self.snarl.get_node_info_mut(block) {
                 node.pos = pos;
             }
+            reach = reach.max(pos.to_vec2() + size);
         }
-        self.show_origin = true;
+        self.show_origin = Some(reach);
+    }
+
+    /// Puts every block on the grid, unless one is being dragged: it moves
+    /// freely and lands on the grid once let go.
+    fn snap_blocks(&mut self, ui: &Ui) {
+        if !self.snap || ui.input(|i| i.pointer.any_down()) {
+            return;
+        }
+        let blocks: Vec<BlockId> = self.snarl.node_ids().map(|(b, _)| b).collect();
+        for block in blocks {
+            if let Some(node) = self.snarl.get_node_info_mut(block) {
+                node.pos = snapped(node.pos);
+            }
+        }
     }
 
     /// egui-snarl removes wires on its own, without asking the viewer, when
@@ -350,6 +366,11 @@ impl Editor {
                 // Inside the block, the default, egui-snarl leaves no room for
                 // the pins of right-aligned outputs: labels run into them.
                 pin_placement: Some(PinPlacement::Edge),
+                bg_pattern: Some(if self.snap {
+                    BackgroundPattern::grid(Vec2::splat(GRID), 0.0)
+                } else {
+                    BackgroundPattern::NoPattern
+                }),
                 ..SnarlStyle::new()
             })
             .show(&mut self.snarl, &mut viewer, ui);
@@ -359,6 +380,7 @@ impl Editor {
             self.arrange_once_drawn = false;
             self.arrange();
         }
+        self.snap_blocks(ui);
         self.disconnect_cables_without_wires();
         if let Some(blocks) = self.to_duplicate.take() {
             self.duplicate(&blocks);

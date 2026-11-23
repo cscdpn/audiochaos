@@ -23,6 +23,8 @@ impl Editor {
         if ui.button("Arrange blocks").clicked() {
             self.arrange();
         }
+        ui.checkbox(&mut self.snap, "Snap to grid")
+            .on_hover_text("Blocks land on the grid when let go");
         ui.separator();
         if ui.button("Import…").clicked() {
             self.import();

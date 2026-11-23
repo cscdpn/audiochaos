@@ -1,6 +1,6 @@
 use egui_snarl::ui::SnarlViewer;
 
-use super::layout::COLUMN_HEIGHT;
+use super::layout::{self, COLUMN_HEIGHT};
 use super::widgets::{AUDIO_PIN, CV_PIN, LED_RADIUS, knob};
 use super::*;
 use crate::engine::control::Engine;
@@ -977,8 +977,9 @@ fn copied_blocks_paste_in_the_middle_of_the_view() {
         .unwrap()
         .pos;
     let on_screen = editor.to_global * pos;
+    // Snapped to the grid, at the zoom of the arranged patch.
     assert!(
-        (on_screen - editor.view.center()).length() < 1.0,
+        (on_screen - editor.view.center()).length() < layout::GRID,
         "{on_screen:?} is not in the middle of {:?}",
         editor.view
     );
