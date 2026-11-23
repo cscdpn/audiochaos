@@ -25,7 +25,7 @@ instruments coming in and out over seven sections (see [Songs](#songs)), and
 
 One block per module, signal inputs (orange) and knob CV inputs (blue) on the
 left, outputs on the right with what they carry (`±1`, `0..1`…), sliders for
-the knobs.
+the knobs and switches for those that are on or off.
 
 - Right-click the canvas to add a module where you clicked; right-click a
   block's title to duplicate or remove it. New modules are named after their type
@@ -137,7 +137,12 @@ takes, signal and knob together; it follows the signal as it moves. A
 block's light shows that pace.
 
 Right-clicking a slider in the editor returns it to its minimum, its middle
-or its default. Signal inputs follow their own rules: `fm` is scaled by the
+or its default.
+
+Some knobs are switches, on or off: `run`, `loop`, and the mutes of `mix`,
+`song` and `mute`. A click flips them; a signal in their `cv` turns them on
+while it is above 0.5 (a gate), and a switch so turned is outlined in blue.
+Muting fades over a few milliseconds rather than clicking. Signal inputs follow their own rules: `fm` is scaled by the
 `fm depth` knob, and `mod` adds to the VCA's gain.
 
 ### Recording
@@ -222,8 +227,8 @@ has no such keyboard: most terminals do not report key releases.
 
 A `sampler` plays a WAV file; click the button on its block to pick one. It
 restarts on each rising edge of `trigger`. `start` and `length` choose a slice,
-as fractions of the file. Past halfway, `loop` repeats that slice for as long as
-it stays there, trigger or not. `speed` is the playback rate; its `speed cv`
+as fractions of the file. With `loop` on, it repeats that slice for as long as
+it stays on, trigger or not. `speed` is the playback rate; its `speed cv`
 takes a `midi` module's `pitch` in tune, the knob setting the speed of middle C.
 
 Some starting points: a pad's gate into `trigger` to fire a drum sound, keys on
@@ -240,7 +245,7 @@ when it cannot run at the output's rate.
 
 A `looper` records its `in` for as long as its `record` gate is held, up to
 30 s, then plays the recording like a `sampler`: `start`, `length`, `speed`,
-and `loop`, on by default, or once per `trigger` when turned down. A new
+and `loop`, on by default, or once per `trigger` when switched off. A new
 recording replaces the last one, and recordings are not saved with the patch.
 `just run looper` records input 1 while a key or a pad is held, and loops it
 through a filter and a delay.
@@ -346,7 +351,8 @@ Module types, as patches and the editor's palette name them:
 | phaser | four all-pass stages swept together, two moving notches |
 | univibe | staggered stages swept by a lagging lamp: a lopsided throb |
 | vca | `out = in * (gain + mod)`, ring modulator when `mod` is audio |
-| mix | four inputs summed, each at its own level |
+| mix | four inputs summed, each at its own level, each with a mute switch |
+| mute | a kill switch on any two cables, as a pan's left and right |
 | pan | places a sound between the speakers, `left` and `right` outputs (see [Stereo](#stereo)) |
 | master | volume and soft limiter, the only thing the speakers hear, `in` on both speakers or `left` and `right` |
 
@@ -384,9 +390,9 @@ the clock and ignore their `time` or `rate` knob, CV included:
 - `seq`: each tick moves to the next step, starting from the first, and `gate`
   follows the clock.
 
-`seq` also has a `run` knob: past halfway it plays, below it stops, holding
+`seq` also has a `run` switch: on, it plays; off, it stops, holding
 its step with the gate closed, and each start starts over from the first
-step. With `run` at 0, a signal in `run cv` starts and stops it, which
+step. With `run` off, a signal in `run cv` starts and stops it, which
 sequences sequencers: a slow `seq` whose steps are 1 or 0 decides which
 bars a faster one plays. Clocked, a sequencer started on a tick plays its
 first step on that tick, and one started between ticks waits for the next.
@@ -461,7 +467,9 @@ is a gate of exactly 1, to bring a drum, a drone or an effect in and out.
 ```
 
 After its last section, the song ends and every track falls silent; with
-`loop` up past halfway, it starts over instead. Sections can change while
+`loop` on, it starts over instead. The switch before each track's name
+mutes it, whatever the grid says, to hear a piece without its bass for a
+while; a gate into its `mute cv` does the same from a pad. Sections can change while
 it plays: the song is a count of bars from its start, so setting the first
 sections to 0 bars jumps to a later one, which helps when working on the
 end of a piece. Plugging its `clock` again starts it over.

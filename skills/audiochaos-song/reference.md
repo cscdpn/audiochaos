@@ -31,7 +31,7 @@ Eight-step CV sequencer, on its own clock or stepped by `clock`. `run` starts an
   - `step 6`: -1..1, default 0. This step's CV, ±1.
   - `step 7`: -1..1, default 0. This step's CV, ±1.
   - `step 8`: -1..1, default 0. This step's CV, ±1.
-  - `run`: 0..1, default 1. Plays past halfway, stops below. Starting again starts from the first step. With the knob at 0, a gate or another seq's `cv` in `run cv` starts and stops it.
+  - `run`: 0..1, default 1. On, it plays; off, it stops. Starting again starts from the first step. With the switch off, a gate or another seq's `cv` in `run cv` starts and stops it.
 
 ## notes
 
@@ -49,7 +49,15 @@ Arranges a whole piece: sections played one after the other, each so many bars l
 - inputs: `clock`
 - outputs: `track 1` (0, or pattern 1..4), `track 2` (0, or pattern 1..4), `track 3` (0, or pattern 1..4), `track 4` (0, or pattern 1..4), `track 5` (0, or pattern 1..4), `track 6` (0, or pattern 1..4), `track 7` (0, or pattern 1..4), `track 8` (0, or pattern 1..4)
 - knobs:
-  - `loop`: 0..1, default 0. Past halfway, the song starts over after its last section. Below, it ends there and every track falls silent.
+  - `loop`: 0..1, default 0. On, the song starts over after its last section. Off, it ends there and every track falls silent.
+  - `mute 1`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 2`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 3`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 4`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 5`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 6`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 7`: 0..1, default 0. On, this track stays silent, whatever the grid says.
+  - `mute 8`: 0..1, default 0. On, this track stays silent, whatever the grid says.
 
 ## lfo
 
@@ -221,7 +229,7 @@ Amplifier, out = in × (gain + mod): notes from an envelope, tremolo from an LFO
 
 ## mix
 
-Four inputs summed, each at its own level: voices into one sound, or a crossfade with CV.
+Four inputs summed, each at its own level and with its own mute: voices into one sound, or a crossfade with CV.
 
 - inputs: `1`, `2`, `3`, `4`
 - outputs: `out` (sum of inputs × levels)
@@ -230,6 +238,19 @@ Four inputs summed, each at its own level: voices into one sound, or a crossfade
   - `level 2`: 0..1, default 1. How much of this input goes into the mix.
   - `level 3`: 0..1, default 1. How much of this input goes into the mix.
   - `level 4`: 0..1, default 1. How much of this input goes into the mix.
+  - `mute 1`: 0..1, default 0. On, this input is left out of the mix, whatever its level.
+  - `mute 2`: 0..1, default 0. On, this input is left out of the mix, whatever its level.
+  - `mute 3`: 0..1, default 0. On, this input is left out of the mix, whatever its level.
+  - `mute 4`: 0..1, default 0. On, this input is left out of the mix, whatever its level.
+
+## mute
+
+A kill switch on any cable: two channels, for a pan's left and right, silenced together by one switch, or by a gate in `mute cv`.
+
+- inputs: `a`, `b`
+- outputs: `a` (a, or silence), `b` (b, or silence)
+- knobs:
+  - `mute`: 0..1, default 0. On, both outputs fall silent.
 
 ## pan
 

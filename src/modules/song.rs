@@ -10,6 +10,11 @@ pub const IN_CLOCK: usize = 0;
 
 pub const LOOP: usize = 0;
 
+/// Parameter index of a track's mute switch.
+pub const fn mute(n: usize) -> usize {
+    1 + n
+}
+
 /// Output index of a track.
 pub const fn track(n: usize) -> usize {
     n
@@ -26,16 +31,38 @@ pub static INFO: ModuleInfo = ModuleInfo {
         "track 1", "track 2", "track 3", "track 4", "track 5", "track 6", "track 7", "track 8",
     ],
     output_details: &["0, or pattern 1..4"; TRACKS],
-    params: &[ParamInfo {
-        name: "loop",
+    params: &[
+        ParamInfo {
+            name: "loop",
+            min: 0.0,
+            max: 1.0,
+            default: 0.0,
+            scale: Scale::Switch,
+            unit: "",
+            help: "On, the song starts over after its last section. Off, it ends there and every track falls silent.",
+        },
+        mute_switch("mute 1"),
+        mute_switch("mute 2"),
+        mute_switch("mute 3"),
+        mute_switch("mute 4"),
+        mute_switch("mute 5"),
+        mute_switch("mute 6"),
+        mute_switch("mute 7"),
+        mute_switch("mute 8"),
+    ],
+};
+
+const fn mute_switch(name: &'static str) -> ParamInfo {
+    ParamInfo {
+        name,
         min: 0.0,
         max: 1.0,
         default: 0.0,
-        scale: Scale::Linear,
+        scale: Scale::Switch,
         unit: "",
-        help: "Past halfway, the song starts over after its last section. Below, it ends there and every track falls silent.",
-    }],
-};
+        help: "On, this track stays silent, whatever the grid says.",
+    }
+}
 
 /// The section playing at `bar`, counting from the song's first bar, if
 /// any: the song may have ended, or have no bars at all.
@@ -124,7 +151,9 @@ impl Module for Song {
                 .and_then(|bar| section_at(bar, arrangement, looping));
             let tracks = section.map(|s| arrangement.sections[s].tracks);
             for (n, out) in outputs.iter_mut().enumerate() {
-                let pattern = tracks.and_then(|tracks| tracks[n]);
+                // At once: a fading pattern number would pick other patterns.
+                let muted = ParamInfo::is_on(params[mute(n)][i]);
+                let pattern = tracks.and_then(|tracks| tracks[n]).filter(|_| !muted);
                 out[i] = pattern.map_or(0.0, |p| f32::from(p) + 1.0);
             }
             self.section = section;
@@ -185,8 +214,10 @@ mod tests {
         song
     }
 
-    fn params(looping: bool) -> [f32; 1] {
-        [if looping { 1.0 } else { 0.0 }]
+    fn params(looping: bool) -> [f32; 1 + TRACKS] {
+        let mut params = [0.0; 1 + TRACKS];
+        params[LOOP] = if looping { 1.0 } else { 0.0 };
+        params
     }
 
     /// Plays one block with `clock` held at a level; returns the first two
@@ -231,6 +262,17 @@ mod tests {
                 [2.0, 0.0],
                 [2.0, 0.0]
             ]
+        );
+    }
+
+    #[test]
+    fn a_muted_track_stays_silent() {
+        let mut song = song(Arc::default());
+        let mut muted = params(false);
+        muted[mute(0)] = 1.0;
+        assert_eq!(
+            bars(&mut song, 4, &muted),
+            [[0.0, 0.0], [0.0, 0.0], [0.0, 1.0], [0.0, 0.0]]
         );
     }
 

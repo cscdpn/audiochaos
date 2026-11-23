@@ -23,7 +23,7 @@ pub static INFO: ModuleInfo = ModuleInfo {
 
 /// A live sampler. A rising `record` gate starts a new recording over the
 /// last one, for as long as the gate stays open, up to `MAX_SECONDS`; then
-/// it plays like `sampler`, and loops at once unless `loop` is turned down.
+/// it plays like `sampler`, and loops at once unless `loop` is switched off.
 /// It stays silent while recording: patch the input around it to hear
 /// yourself. Recordings are not saved with the patch.
 pub struct Looper {

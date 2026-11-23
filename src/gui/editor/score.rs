@@ -39,8 +39,14 @@ fn next_cell(cell: Option<u8>) -> Option<u8> {
 }
 
 /// Edits a song's arrangement. `tracks` names each track by what its output
-/// feeds. Returns whether anything changed.
-pub(super) fn arrangement(arrangement: &mut Arrangement, tracks: &[String], ui: &mut Ui) -> bool {
+/// feeds, and `mute` draws a track's mute switch before its name. Returns
+/// whether the arrangement changed.
+pub(super) fn arrangement(
+    arrangement: &mut Arrangement,
+    tracks: &[String],
+    mute: &mut dyn FnMut(usize, &mut Ui),
+    ui: &mut Ui,
+) -> bool {
     let mut changed = false;
     egui::Grid::new(ui.id().with("arrangement"))
         .spacing([2.0, 2.0])
@@ -58,7 +64,10 @@ pub(super) fn arrangement(arrangement: &mut Arrangement, tracks: &[String], ui: 
             }
             ui.end_row();
             for (t, name) in tracks.iter().enumerate() {
-                ui.label(name);
+                ui.horizontal(|ui| {
+                    mute(t, ui);
+                    ui.label(name);
+                });
                 for section in &mut arrangement.sections {
                     let cell = &mut section.tracks[t];
                     let text =

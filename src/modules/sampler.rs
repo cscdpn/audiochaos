@@ -49,9 +49,9 @@ pub(crate) const fn playback(loop_default: f32) -> [ParamInfo; 4] {
             min: 0.0,
             max: 1.0,
             default: loop_default,
-            scale: Scale::Linear,
+            scale: Scale::Switch,
             unit: "",
-            help: "Past halfway, repeats the slice for as long as it stays there.",
+            help: "On, repeats the slice for as long as it stays on.",
         },
     ]
 }

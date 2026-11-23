@@ -1,5 +1,5 @@
-//! The controls drawn inside blocks: knobs with their modulation tick, and
-//! lights.
+//! The controls drawn inside blocks: knobs with their modulation tick,
+//! switches, and lights.
 
 use egui::{Color32, Rect, Ui};
 
@@ -84,4 +84,59 @@ pub(super) fn knob(
         }
     });
     changed
+}
+
+/// A toggle switch for an on/off knob, with its name beside it. Returns
+/// whether `value` changed.
+pub(super) fn switch(
+    param: &ParamInfo,
+    value: &mut f32,
+    modulated: Option<f32>,
+    ui: &mut Ui,
+) -> bool {
+    ui.horizontal(|ui| {
+        let changed = toggle(param, value, modulated, ui);
+        ui.add(egui::Label::new(param.name).selectable(false))
+            .on_hover_text(param.help);
+        changed
+    })
+    .inner
+}
+
+/// A toggle switch alone, outlined in the colour of CV inputs when CV turns
+/// it the other way (`modulated`). Returns whether `value` changed.
+pub(super) fn toggle(
+    param: &ParamInfo,
+    value: &mut f32,
+    modulated: Option<f32>,
+    ui: &mut Ui,
+) -> bool {
+    let on = ParamInfo::is_on(*value);
+    let flipped = modulated.is_some_and(|m| ParamInfo::is_on(m) != on);
+    let size = ui.spacing().interact_size.y * egui::vec2(1.8, 1.0);
+    let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let how_on = ui.ctx().animate_bool_responsive(response.id, on);
+    let visuals = ui.style().interact_selectable(&response, on);
+    let radius = rect.height() / 2.0;
+    let stroke = if flipped {
+        egui::Stroke::new(2.0, CV_PIN)
+    } else {
+        visuals.bg_stroke
+    };
+    let painter = ui.painter();
+    painter.rect(
+        rect,
+        radius,
+        visuals.bg_fill,
+        stroke,
+        egui::StrokeKind::Inside,
+    );
+    let x = egui::lerp((rect.left() + radius)..=(rect.right() - radius), how_on);
+    let handle = egui::pos2(x, rect.center().y);
+    painter.circle(handle, 0.75 * radius, visuals.bg_fill, visuals.fg_stroke);
+    if response.on_hover_text(param.help).clicked() {
+        *value = if on { param.min } else { param.max };
+        return true;
+    }
+    false
 }

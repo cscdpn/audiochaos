@@ -59,9 +59,9 @@ pub static INFO: ModuleInfo = ModuleInfo {
             min: 0.0,
             max: 1.0,
             default: 1.0,
-            scale: Scale::Linear,
+            scale: Scale::Switch,
             unit: "",
-            help: "Plays past halfway, stops below. Starting again starts from the first step. With the knob at 0, a gate or another seq's `cv` in `run cv` starts and stops it.",
+            help: "On, it plays; off, it stops. Starting again starts from the first step. With the switch off, a gate or another seq's `cv` in `run cv` starts and stops it.",
         },
     ],
 };

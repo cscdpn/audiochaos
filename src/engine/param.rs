@@ -17,6 +17,10 @@ pub enum Scale {
     /// Equal knob travel multiplies the value by the same factor, which is how
     /// we hear frequencies and times. Requires `min > 0`.
     Exponential,
+    /// On or off, 1 or 0, drawn as a switch. Linear underneath, so the glide
+    /// fades between the two instead of clicking, and a CV adds to it like
+    /// to any knob: a gate turns a switch that is off on.
+    Switch,
 }
 
 /// A knob: its range and how knob travel maps onto that range.
@@ -39,8 +43,16 @@ impl ParamInfo {
         value.clamp(self.min, self.max)
     }
 
+    /// Whether a switch with this value is on.
+    pub fn is_on(value: f32) -> bool {
+        value > 0.5
+    }
+
     /// The value in readable units, as the UIs show it.
     pub fn format(&self, value: f32) -> String {
+        if self.scale == Scale::Switch {
+            return if Self::is_on(value) { "on" } else { "off" }.to_string();
+        }
         let unit = self.unit;
         match unit {
             "Hz" if value >= 1000.0 => format!("{:.2} kHz", value / 1000.0),
@@ -55,7 +67,7 @@ impl ParamInfo {
 
     pub fn to_normalized(&self, value: f32) -> f32 {
         let n = match self.scale {
-            Scale::Linear => (value - self.min) / (self.max - self.min),
+            Scale::Linear | Scale::Switch => (value - self.min) / (self.max - self.min),
             Scale::Exponential => (value / self.min).ln() / (self.max / self.min).ln(),
         };
         n.clamp(0.0, 1.0)
@@ -66,7 +78,7 @@ impl ParamInfo {
     pub fn from_normalized(&self, n: f32) -> f32 {
         let n = n.clamp(0.0, 1.0);
         match self.scale {
-            Scale::Linear => self.min + n * (self.max - self.min),
+            Scale::Linear | Scale::Switch => self.min + n * (self.max - self.min),
             Scale::Exponential => self.min * (self.max / self.min).powf(n),
         }
     }
@@ -138,6 +150,14 @@ mod tests {
             unit: "",
             help: "",
         }
+    }
+
+    #[test]
+    fn switches_read_on_or_off() {
+        let switch = param(Scale::Switch, 0.0, 1.0);
+        assert_eq!(switch.format(1.0), "on");
+        assert_eq!(switch.format(0.0), "off");
+        assert_eq!(switch.from_normalized(0.5), 0.5, "fades in between");
     }
 
     #[test]

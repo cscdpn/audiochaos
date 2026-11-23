@@ -6,6 +6,18 @@ Notable changes, newest first. The format follows
 break patch files, which then fail to load with a message rather than load
 wrong.
 
+## [Unreleased]
+
+### Added
+
+- `mute`, a kill switch for any two cables, such as a `pan`'s left and
+  right; a mute switch on each input of `mix` and each track of `song`, in
+  its grid.
+
+### Changed
+
+- Knobs that are on or off, `run` and `loop`, are switches in the editor.
+
 ## [0.1.0] - 2026-11-09
 
 The first release of audiochaos, a modular synthesizer for chaotic,

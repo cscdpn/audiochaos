@@ -5,6 +5,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::engine::control::Controller;
 use crate::engine::graph::Cable;
+use crate::engine::param::Scale;
 
 /// Knob travel per key press, in normalized units.
 const FINE_STEP: f32 = 0.01;
@@ -150,7 +151,12 @@ impl App {
         let Slot { node, index } = self.knobs.selected();
         let state = &self.controller.nodes()[node];
         let info = &state.info.params[index];
-        let value = info.from_normalized(info.to_normalized(state.params[index]) + delta);
+        let value = match info.scale {
+            // Any turn flips it all the way.
+            Scale::Switch if delta > 0.0 => info.max,
+            Scale::Switch => info.min,
+            _ => info.from_normalized(info.to_normalized(state.params[index]) + delta),
+        };
         if let Err(e) = self.controller.set_param(state.id, index, value) {
             self.status = format!("knob not changed: {e}");
         }

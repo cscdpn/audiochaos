@@ -10,16 +10,17 @@ use egui_snarl::{InPin, InPinId, NodeId as BlockId, OutPin, OutPinId, Snarl};
 
 use crate::engine::control::{Controller, SampleState};
 use crate::engine::graph::{Cable, NodeId};
+use crate::engine::param::Scale;
 use crate::engine::sample::Sample;
 use crate::engine::score::{Score, TRACKS};
 use crate::modules::clock::Tap;
-use crate::modules::{self, Context, clock, master, sampler};
+use crate::modules::{self, Context, clock, master, sampler, song};
 use crate::patch;
 
 use super::layout::BLOCK_GAP;
 use super::score::{self, NoteView};
 use super::snarl_id;
-use super::widgets::{AUDIO_PIN, CV_PIN, SLIDER_WIDTH, knob, led};
+use super::widgets::{AUDIO_PIN, CV_PIN, SLIDER_WIDTH, knob, led, switch, toggle};
 
 /// Draws blocks for egui-snarl and turns edits into controller calls.
 pub(super) struct Viewer<'a> {
@@ -249,11 +250,20 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
         let sample = node.sample.clone();
         ui.spacing_mut().slider_width = SLIDER_WIDTH;
         ui.vertical(|ui| {
-            for (p, (param, value)) in info.params.iter().zip(&mut values).enumerate() {
+            // A song's mutes are in its grid, beside their tracks.
+            let shown = if info.name == song::INFO.name {
+                &info.params[..song::mute(0)]
+            } else {
+                info.params
+            };
+            for (p, (param, value)) in shown.iter().zip(&mut values).enumerate() {
                 let modulated = self.controller.modulated(id, p);
-                if knob(param, value, modulated, ui)
-                    && let Err(e) = self.controller.set_param(id, p, *value)
-                {
+                let changed = if param.scale == Scale::Switch {
+                    switch(param, value, modulated, ui)
+                } else {
+                    knob(param, value, modulated, ui)
+                };
+                if changed && let Err(e) = self.controller.set_param(id, p, *value) {
                     *self.status = format!("knob not changed: {e}");
                 }
             }
@@ -266,7 +276,18 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
             if let Some(mut score) = self.controller.node(id).score.clone() {
                 let changed = match &mut score {
                     Score::Arrangement(arrangement) => {
-                        score::arrangement(arrangement, &self.track_names(id), ui)
+                        let names = self.track_names(id);
+                        let mut mute = |track: usize, ui: &mut Ui| {
+                            let p = song::mute(track);
+                            let mut value = values[p];
+                            let modulated = self.controller.modulated(id, p);
+                            if toggle(&info.params[p], &mut value, modulated, ui)
+                                && let Err(e) = self.controller.set_param(id, p, value)
+                            {
+                                *self.status = format!("not muted: {e}");
+                            }
+                        };
+                        score::arrangement(arrangement, &names, &mut mute, ui)
                     }
                     Score::Patterns(patterns) => {
                         let view = self.note_views.entry(id).or_default();

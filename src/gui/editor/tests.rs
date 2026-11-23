@@ -592,8 +592,14 @@ fn blocks_with_a_light_show_it_once_the_patch_plays() {
         shapes
             .iter()
             .filter_map(|shape| match shape {
-                // Every other circle is a pin; the view's zoom scales radii.
-                egui::Shape::Circle(c) if c.fill != AUDIO_PIN && c.fill != CV_PIN => {
+                // Other circles are pins, orange or blue, and the handles of
+                // switches, in the widgets' grey or blue; the view's zoom
+                // scales radii.
+                egui::Shape::Circle(c)
+                    if c.fill != AUDIO_PIN
+                        && c.fill != CV_PIN
+                        && u16::from(c.fill.r()) > 2 * u16::from(c.fill.g().max(c.fill.b())) =>
+                {
                     Some(shape.visual_bounding_rect())
                 }
                 _ => None,
@@ -1070,4 +1076,61 @@ fn clicking_the_piano_roll_plays_a_note_there() {
         patterns.patterns[0],
         [Step::Rest, Step::Note(e3), Step::Rest, Step::Rest]
     );
+}
+
+/// Where a switch is: just left of its name.
+fn switch_left_of(label: Rect) -> Pos2 {
+    egui::pos2(label.left() - 20.0, label.center().y)
+}
+
+#[test]
+fn clicking_a_switch_flips_its_knob() {
+    use crate::modules::mixer;
+    use egui::PointerButton::Primary;
+
+    let mut editor = editor_for(
+        r#"{ "version": 2, "modules": [
+            { "name": "mix", "type": "mix" },
+            { "name": "master", "type": "master" }
+        ] }"#,
+    );
+    let ctx = egui::Context::default();
+    paint(&mut editor, &ctx, vec![]);
+    let shapes = paint(&mut editor, &ctx, vec![]);
+    let at = switch_left_of(text_at(&shapes, "mute 2"));
+    let id = module(&editor, "mix");
+    let muted = |editor: &Editor| editor.controller.node(id).params[mixer::mute(1)];
+    click_at(&mut editor, &ctx, at, Primary);
+    assert_eq!(muted(&editor), 1.0);
+    click_at(&mut editor, &ctx, at, Primary);
+    assert_eq!(muted(&editor), 0.0);
+}
+
+#[test]
+fn a_song_track_is_muted_from_its_row() {
+    use crate::modules::song;
+    use egui::PointerButton::Primary;
+
+    let mut editor = editor_for(
+        r#"{ "version": 2, "modules": [
+            { "name": "song", "type": "song", "sections": [{ "name": "verse", "bars": 4 }] },
+            { "name": "lead", "type": "notes" },
+            { "name": "master", "type": "master" }
+        ], "cables": [{ "from": "song", "output": "track 2", "to": "lead", "input": "play" }] }"#,
+    );
+    let ctx = egui::Context::default();
+    paint(&mut editor, &ctx, vec![]);
+    let shapes = paint(&mut editor, &ctx, vec![]);
+    assert!(
+        texts(&shapes).iter().all(|(t, _)| t != "mute 2"),
+        "not among the knobs"
+    );
+    click_at(
+        &mut editor,
+        &ctx,
+        switch_left_of(text_at(&shapes, "2 lead")),
+        Primary,
+    );
+    let id = module(&editor, "song");
+    assert_eq!(editor.controller.node(id).params[song::mute(1)], 1.0);
 }
