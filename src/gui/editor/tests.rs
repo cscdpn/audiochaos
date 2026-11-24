@@ -214,6 +214,54 @@ fn the_palette_adds_a_module_and_its_block_where_clicked() {
 }
 
 #[test]
+fn the_palette_sorts_modules_into_submenus() {
+    let mut editor = editor("bass");
+    let ctx = egui::Context::default();
+    let frame = |editor: &mut Editor, events| texts(&paint(editor, &ctx, events));
+    let names = |texts: &[(String, Rect)]| -> Vec<String> {
+        texts.iter().map(|(t, _)| t.clone()).collect()
+    };
+    // An empty spot, below and right of the blocks.
+    let canvas = egui::pos2(1350.0, 850.0);
+    frame(&mut editor, vec![egui::Event::PointerMoved(canvas)]);
+    frame(
+        &mut editor,
+        vec![click(canvas, egui::PointerButton::Secondary, true)],
+    );
+    frame(
+        &mut editor,
+        vec![click(canvas, egui::PointerButton::Secondary, false)],
+    );
+    let menu = frame(&mut editor, vec![]);
+    let shown = names(&menu);
+    assert!(shown.contains(&"Effects".to_string()), "{shown:?}");
+    assert!(!shown.contains(&"flanger".to_string()), "{shown:?}");
+
+    let category = menu.iter().find(|(t, _)| t == "Effects").unwrap().1;
+    frame(
+        &mut editor,
+        vec![egui::Event::PointerMoved(category.center())],
+    );
+    let submenu = frame(&mut editor, vec![]);
+    let (_, flanger) = submenu
+        .iter()
+        .find(|(t, _)| t == "flanger")
+        .unwrap_or_else(|| panic!("{:?}", names(&submenu)));
+    let flanger = flanger.center();
+    frame(&mut editor, vec![egui::Event::PointerMoved(flanger)]);
+    frame(
+        &mut editor,
+        vec![click(flanger, egui::PointerButton::Primary, true)],
+    );
+    frame(
+        &mut editor,
+        vec![click(flanger, egui::PointerButton::Primary, false)],
+    );
+    assert_eq!(editor.status, "added flanger");
+    assert!(!names(&frame(&mut editor, vec![])).contains(&"Effects".to_string()));
+}
+
+#[test]
 fn samplers_take_a_sound_from_a_file_or_say_why_not() {
     let mut editor = editor("bass");
     with_viewer(&mut editor, |viewer, snarl| {

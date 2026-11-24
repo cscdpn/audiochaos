@@ -27,9 +27,10 @@ One block per module, signal inputs (orange) and knob CV inputs (blue) on the
 left, outputs on the right with what they carry (`±1`, `0..1`…), sliders for
 the knobs and switches for those that are on or off.
 
-- Right-click the canvas to add a module where you clicked; right-click a
-  block's title to duplicate or remove it. New modules are named after their type
-  (`filter`, `filter 2`…). The master is the one output and stays.
+- Right-click the canvas to add a module where you clicked, from submenus by
+  kind (sources, effects, mixing…); right-click a block's title to duplicate
+  or remove it. New modules are named after their type (`filter`,
+  `filter 2`…). The master is the one output and stays.
 - Drag from an output to an input to connect; drag a block by its title.
 - Right-click a wire to remove it, or a pin to remove all of its wires.
 - Ctrl+drag from a pin picks up its wires to move them to another pin;
@@ -328,35 +329,44 @@ blocks arranged as **Arrange blocks** does.
 
 ### Modules
 
-Module types, as patches and the editor's palette name them:
+Module types, as patches and the editor's palette name them, by the
+palette's submenus:
 
 | Type | Does |
 |---|---|
+| **Inputs** | |
 | input | the sound card's first two inputs: a microphone, an instrument |
 | midi | a MIDI controller's keyboard, pads and knobs as voltages |
 | poly | the keyboard as four voices, for chords |
+| **Sequencing** | |
 | clock | a tempo, tapped on its `tap` input or Tap button, as gates: bar, beat, 8th, dotted 8th, 16th |
 | seq | 8-step CV sequencer with its own clock, `cv` and `gate` outputs, started and stopped by `run` |
 | notes | melodies by note name: patterns A to D on a piano roll, `pitch` and `gate` outputs (see [Melodies](#melodies)) |
 | song | arranger: sections so many bars long, and eight tracks saying who plays which pattern in each (see [Songs](#songs)) |
+| **Modulation** | |
 | lfo | slow sine, triangle, saw and square |
 | adsr | envelope from a gate: attack, decay, sustain, release |
-| noise | white noise |
-| sampler | plays a slice of a WAV file, once or looping, at any speed |
-| looper | records its input while `record` is held, then plays it like `sampler` |
 | s&h | sample & hold: grabs `in` on each rising edge of `trigger` |
+| **Utilities** | |
 | atten | three attenuverters: each output is its input times -1..1 |
 | invert | `-in` mirrors a ±1 signal, `1-in` flips a 0..1 one: a gate's NOT |
 | logic | `and`, `or`, `xor` of two signals and `not` of the first, high above 0 |
+| **Sources** | |
 | osc | sine, saw, square, with through-zero linear FM |
+| noise | white noise |
+| sampler | plays a slice of a WAV file, once or looping, at any speed |
+| looper | records its input while `record` is held, then plays it like `sampler` |
+| **Filters & drive** | |
 | filter | resonant state-variable filter: lowpass, bandpass, highpass |
 | dist | drive into a blend of `tanh` clipping and sine wavefolding |
 | crush | bitcrusher: bit depth and sample-rate reduction |
+| **Effects** | |
 | delay | up to 2 s, feedback above 1 self-oscillates instead of exploding |
 | chorus | three voices swaying around 20 ms, like several players together |
 | flanger | a very short swept delay, whose feedback sharpens the comb and can sing |
 | phaser | four all-pass stages swept together, two moving notches |
 | univibe | staggered stages swept by a lagging lamp: a lopsided throb |
+| **Mixing** | |
 | vca | `out = in * (gain + mod)`, ring modulator when `mod` is audio |
 | mix | four inputs summed, each at its own level, each with a mute switch |
 | mute | a kill switch on any two cables, as a pan's left and right |

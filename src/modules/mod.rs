@@ -65,134 +65,194 @@ impl Context {
     }
 }
 
+/// Where a kind of module sits in the editor's palette, in palette order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Category {
+    Input,
+    Sequencing,
+    Modulation,
+    Utility,
+    Source,
+    Filter,
+    Effect,
+    Mixing,
+}
+
+impl Category {
+    /// As the palette's submenus show it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Input => "Inputs",
+            Self::Sequencing => "Sequencing",
+            Self::Modulation => "Modulation",
+            Self::Utility => "Utilities",
+            Self::Source => "Sources",
+            Self::Filter => "Filters & drive",
+            Self::Effect => "Effects",
+            Self::Mixing => "Mixing",
+        }
+    }
+}
+
 /// A kind of module: what it is, and how to build one. `seed` makes each
 /// noise source different, yet reproducible.
 pub struct Kind {
     pub info: &'static ModuleInfo,
+    pub category: Category,
     build: fn(context: &Context, seed: u32) -> Box<dyn Module>,
 }
 
-/// Every kind of module, in the editor's palette order. Adding a module is
-/// adding it here.
+/// Every kind of module, in the editor's palette order, grouped by
+/// category. Adding a module is adding it here.
 pub const KINDS: [Kind; 30] = [
     Kind {
         info: &input::INFO,
+        category: Category::Input,
         build: |c, _| Box::new(input::Input::new(Arc::clone(&c.input))),
     },
     Kind {
         info: &midi::INFO,
+        category: Category::Input,
         build: |c, _| Box::new(midi::Midi::new(Arc::clone(&c.midi), c.sample_rate)),
     },
     Kind {
         info: &poly::INFO,
+        category: Category::Input,
         build: |c, _| Box::new(poly::Poly::new(Arc::clone(&c.midi), c.sample_rate)),
     },
     Kind {
         info: &clock::INFO,
+        category: Category::Sequencing,
         build: |c, _| Box::new(clock::Clock::new(c.sample_rate, Arc::clone(&c.transport))),
     },
     Kind {
         info: &sequencer::INFO,
+        category: Category::Sequencing,
         build: |c, _| Box::new(sequencer::Sequencer::new(c.sample_rate)),
     },
     Kind {
         info: &notes::INFO,
+        category: Category::Sequencing,
         build: |c, _| Box::new(notes::Notes::new(c.sample_rate)),
     },
     Kind {
         info: &song::INFO,
+        category: Category::Sequencing,
         build: |c, _| Box::new(song::Song::new(Arc::clone(&c.transport))),
     },
     Kind {
         info: &lfo::INFO,
+        category: Category::Modulation,
         build: |c, _| Box::new(lfo::Lfo::new(c.sample_rate)),
     },
     Kind {
         info: &adsr::INFO,
+        category: Category::Modulation,
         build: |c, _| Box::new(adsr::Adsr::new(c.sample_rate)),
     },
     Kind {
-        info: &noise::INFO,
-        build: |_, seed| Box::new(noise::Noise::new(seed)),
-    },
-    Kind {
         info: &sample_hold::INFO,
+        category: Category::Modulation,
         build: |_, _| Box::new(sample_hold::SampleHold::new()),
     },
     Kind {
-        info: &sampler::INFO,
-        build: |c, _| Box::new(sampler::Sampler::new(c.sample_rate)),
-    },
-    Kind {
-        info: &looper::INFO,
-        build: |c, _| Box::new(looper::Looper::new(c.sample_rate)),
-    },
-    Kind {
         info: &atten::INFO,
+        category: Category::Utility,
         build: |_, _| Box::new(atten::Atten),
     },
     Kind {
         info: &invert::INFO,
+        category: Category::Utility,
         build: |_, _| Box::new(invert::Invert),
     },
     Kind {
         info: &logic::INFO,
+        category: Category::Utility,
         build: |_, _| Box::new(logic::Logic::default()),
     },
     Kind {
         info: &oscillator::INFO,
+        category: Category::Source,
         build: |c, _| Box::new(oscillator::Oscillator::new(c.sample_rate)),
     },
     Kind {
+        info: &noise::INFO,
+        category: Category::Source,
+        build: |_, seed| Box::new(noise::Noise::new(seed)),
+    },
+    Kind {
+        info: &sampler::INFO,
+        category: Category::Source,
+        build: |c, _| Box::new(sampler::Sampler::new(c.sample_rate)),
+    },
+    Kind {
+        info: &looper::INFO,
+        category: Category::Source,
+        build: |c, _| Box::new(looper::Looper::new(c.sample_rate)),
+    },
+    Kind {
         info: &filter::INFO,
+        category: Category::Filter,
         build: |c, _| Box::new(filter::Filter::new(c.sample_rate)),
     },
     Kind {
         info: &distortion::INFO,
+        category: Category::Filter,
         build: |_, _| Box::new(distortion::Distortion),
     },
     Kind {
         info: &crusher::INFO,
+        category: Category::Filter,
         build: |_, _| Box::new(crusher::Crusher::new()),
     },
     Kind {
         info: &delay::INFO,
+        category: Category::Effect,
         build: |c, _| Box::new(delay::Delay::new(c.sample_rate)),
     },
     Kind {
         info: &chorus::INFO,
+        category: Category::Effect,
         build: |c, _| Box::new(chorus::Chorus::new(c.sample_rate)),
     },
     Kind {
         info: &flanger::INFO,
+        category: Category::Effect,
         build: |c, _| Box::new(flanger::Flanger::new(c.sample_rate)),
     },
     Kind {
         info: &phaser::INFO,
+        category: Category::Effect,
         build: |c, _| Box::new(phaser::Phaser::new(c.sample_rate)),
     },
     Kind {
         info: &univibe::INFO,
+        category: Category::Effect,
         build: |c, _| Box::new(univibe::Univibe::new(c.sample_rate)),
     },
     Kind {
         info: &vca::INFO,
+        category: Category::Mixing,
         build: |_, _| Box::new(vca::Vca),
     },
     Kind {
         info: &mixer::INFO,
+        category: Category::Mixing,
         build: |_, _| Box::new(mixer::Mixer),
     },
     Kind {
         info: &mute::INFO,
+        category: Category::Mixing,
         build: |_, _| Box::new(mute::Mute),
     },
     Kind {
         info: &pan::INFO,
+        category: Category::Mixing,
         build: |_, _| Box::new(pan::Pan),
     },
     Kind {
         info: &master::INFO,
+        category: Category::Mixing,
         build: |_, _| Box::new(master::Master),
     },
 ];
@@ -200,6 +260,13 @@ pub const KINDS: [Kind; 30] = [
 /// The descriptions of every kind of module, in palette order.
 pub fn infos() -> impl Iterator<Item = &'static ModuleInfo> {
     KINDS.iter().map(|kind| kind.info)
+}
+
+/// The palette: every kind of module in its category, categories in order.
+pub fn palette() -> impl Iterator<Item = (Category, impl Iterator<Item = &'static ModuleInfo>)> {
+    KINDS
+        .chunk_by(|a, b| a.category == b.category)
+        .map(|kinds| (kinds[0].category, kinds.iter().map(|kind| kind.info)))
 }
 
 /// A new module of the given kind, or `None` if no kind has that name.
@@ -229,6 +296,13 @@ mod tests {
         names.sort_unstable();
         names.dedup();
         assert_eq!(names.len(), KINDS.len());
+    }
+
+    #[test]
+    fn each_category_comes_once_in_the_palette() {
+        let categories: Vec<_> = palette().map(|(category, _)| category).collect();
+        assert!(categories.is_sorted_by(|a, b| a < b), "{categories:?}");
+        assert_eq!(palette().flat_map(|(_, infos)| infos).count(), KINDS.len());
     }
 
     #[test]

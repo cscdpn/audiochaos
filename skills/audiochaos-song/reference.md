@@ -80,13 +80,6 @@ Envelope: shapes a note from a gate, rising, falling to a level held with the ke
   - `sustain`: 0..1, default 0.7. Level held for as long as the gate stays open.
   - `release`: 0.001..10 s, default 0.3. Time to fade out once the gate closes.
 
-## noise
-
-White noise: hiss for percussion, or random steps through `s&h`.
-
-- inputs: none
-- outputs: `white` (±1)
-
 ## s&h
 
 Sample & hold: grabs `in` on each rising edge of `trigger` and holds it. Noise in, random steps out.
@@ -128,6 +121,13 @@ Oscillator: sine, saw and square, with linear FM for metallic sounds.
 - knobs:
   - `freq`: 1..10000 Hz, default 110. Pitch. With a MIDI `pitch` in `freq cv`, the pitch of middle C.
   - `fm depth`: 1..10000 Hz, default 100. How far `fm` pushes the frequency; past the pitch itself it goes through zero and turns metallic.
+
+## noise
+
+White noise: hiss for percussion, or random steps through `s&h`.
+
+- inputs: none
+- outputs: `white` (±1)
 
 ## filter
 

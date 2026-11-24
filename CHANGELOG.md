@@ -21,6 +21,9 @@ wrong.
 - Knobs that are on or off, `run` and `loop`, are switches in the editor.
 - Arrange blocks follows the signal, each block right of what feeds it, and
   orders columns to uncross wires; then zooms out to show the whole patch.
+- The editor's palette sorts modules into submenus by kind: inputs,
+  sequencing, modulation, utilities, sources, filters & drive, effects,
+  mixing.
 
 ## [0.1.0] - 2026-11-09
 

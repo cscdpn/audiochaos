@@ -339,16 +339,20 @@ impl SnarlViewer<NodeId> for Viewer<'_> {
 
     fn show_graph_menu(&mut self, pos: Pos2, ui: &mut Ui, snarl: &mut Snarl<NodeId>) {
         ui.label("Add module");
-        // The master is the one output; a patch has exactly one.
-        for info in modules::infos().filter(|i| i.name != master::INFO.name) {
-            if ui
-                .button(info.name)
-                .on_hover_text(info.description)
-                .clicked()
-            {
-                self.add(info.name, pos, snarl);
-                ui.close();
-            }
+        for (category, infos) in modules::palette() {
+            ui.menu_button(category.name(), |ui| {
+                // The master is the one output; a patch has exactly one.
+                for info in infos.filter(|i| i.name != master::INFO.name) {
+                    if ui
+                        .button(info.name)
+                        .on_hover_text(info.description)
+                        .clicked()
+                    {
+                        self.add(info.name, pos, snarl);
+                        ui.close();
+                    }
+                }
+            });
         }
     }
 
