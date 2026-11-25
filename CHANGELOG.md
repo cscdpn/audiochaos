@@ -28,6 +28,11 @@ wrong.
   sequencing, modulation, utilities, sources, filters & drive, effects,
   mixing.
 
+### Fixed
+
+- A patch without block positions, as a generated song, no longer opens
+  with its `song` block touching the blocks right of it.
+
 ## [0.1.0] - 2026-11-09
 
 The first release of audiochaos, a modular synthesizer for chaotic,

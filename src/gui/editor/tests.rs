@@ -387,6 +387,23 @@ fn right_clicking_a_knob_opens_its_menu() {
     assert!(frame(vec![]).1);
 }
 
+/// Paints until blocks are where they stay, and returns the last frame: a
+/// patch without positions is arranged once block sizes settle, and shown
+/// in full the frame after.
+fn settled(editor: &mut Editor, ctx: &egui::Context) -> Vec<egui::Shape> {
+    for _ in 0..MAX_SETTLING_PASSES {
+        paint(editor, ctx, vec![]);
+        if editor.arrange_once_drawn.is_none() {
+            break;
+        }
+    }
+    assert!(
+        editor.arrange_once_drawn.is_none(),
+        "blocks still unarranged"
+    );
+    paint(editor, ctx, vec![])
+}
+
 /// One frame of the editor as a window would draw it, flattened into what
 /// gets painted.
 fn paint(editor: &mut Editor, ctx: &egui::Context, events: Vec<egui::Event>) -> Vec<egui::Shape> {
@@ -459,8 +476,7 @@ fn no_label_runs_into_a_pin_or_another_label() {
     for preset in presets::names() {
         let mut editor = editor(preset);
         let ctx = egui::Context::default();
-        paint(&mut editor, &ctx, vec![]);
-        let shapes = paint(&mut editor, &ctx, vec![]);
+        let shapes = settled(&mut editor, &ctx);
         let pins: Vec<_> = shapes
             .iter()
             .filter_map(|shape| match shape {
@@ -489,27 +505,23 @@ fn no_label_runs_into_a_pin_or_another_label() {
 
 #[test]
 fn a_patch_without_positions_is_arranged_by_the_real_sizes_of_its_blocks() {
-    // A clock block is wider than the default layout guesses.
+    // A clock block is wider than the default layout guesses, and the song
+    // block's grid only gets its final width the pass after it shows.
     let patch = presets::get("song").unwrap();
     let (graph, out) = patch.build(&Context::new(48_000.0)).unwrap();
     let (_, controller) = Engine::new(graph, out, 1024);
     let mut editor = Editor::new(controller, Context::new(48_000.0), &BTreeMap::new());
-    let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    paint(&mut editor, &ctx, vec![]);
-    let rects: Vec<Rect> = editor
-        .snarl
-        .node_ids()
-        .map(|(block, _)| {
-            Rect::from_min_size(
-                editor.snarl.get_node_info(block).unwrap().pos,
-                editor.sizes[&block],
-            )
-        })
-        .collect();
-    for (i, a) in rects.iter().enumerate() {
-        for b in &rects[i + 1..] {
-            assert!(!a.intersects(*b), "{a:?} overlaps {b:?}");
+    settled(&mut editor, &egui::Context::default());
+    let rects = block_rects(&editor);
+    for (i, (a_name, a)) in rects.iter().enumerate() {
+        for (b_name, b) in &rects[i + 1..] {
+            // At least half the gap between blocks: touching ones look
+            // piled up.
+            let margin = layout::BLOCK_GAP / 4.0;
+            assert!(
+                !a.expand(margin).intersects(b.expand(margin)),
+                "{a_name} {a:?} is too close to {b_name} {b:?}"
+            );
         }
     }
 }
@@ -527,8 +539,7 @@ fn the_menu_of_a_knob_resets_it_in_the_playing_patch() {
     );
 
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     // The slider lies left of its value and name.
     let name = text_at(&shapes, param.name);
     let on_slider = egui::pos2(name.left() - 100.0, name.center().y);
@@ -735,8 +746,7 @@ fn hovering_a_knob_says_what_it_does() {
     let mut editor = editor("keys");
     let param = &delay::INFO.params[delay::FEEDBACK];
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     let name = text_at(&shapes, param.name);
     let on_slider = egui::pos2(name.left() - 100.0, name.center().y);
     let mut shown = false;
@@ -840,8 +850,7 @@ fn modulated_knobs_are_marked_once_the_patch_plays() {
         .count();
     assert!(moved > 0, "the chaos preset modulates knobs");
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     assert_eq!(marks(&shapes).len(), moved);
 }
 
@@ -1073,8 +1082,7 @@ fn clicking_a_song_cell_picks_the_next_pattern() {
         ], "cables": [{ "from": "song", "output": "track 2", "to": "lead", "input": "play" }] }"#,
     );
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     // Tracks are named after what they feed.
     let cell = egui::pos2(
         text_at(&shapes, "verse").center().x,
@@ -1106,8 +1114,7 @@ fn clicking_the_piano_roll_plays_a_note_there() {
         ] }"#,
     );
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     // Note names end a little left of the grid; the second step.
     let label = text_at(&shapes, "E3");
     let scale = editor.to_global.scaling;
@@ -1144,8 +1151,7 @@ fn clicking_a_switch_flips_its_knob() {
         ] }"#,
     );
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     let at = switch_left_of(text_at(&shapes, "mute 2"));
     let id = module(&editor, "mix");
     let muted = |editor: &Editor| editor.controller.node(id).params[mixer::mute(1)];
@@ -1168,8 +1174,7 @@ fn a_song_track_is_muted_from_its_row() {
         ], "cables": [{ "from": "song", "output": "track 2", "to": "lead", "input": "play" }] }"#,
     );
     let ctx = egui::Context::default();
-    paint(&mut editor, &ctx, vec![]);
-    let shapes = paint(&mut editor, &ctx, vec![]);
+    let shapes = settled(&mut editor, &ctx);
     assert!(
         texts(&shapes).iter().all(|(t, _)| t != "mute 2"),
         "not among the knobs"

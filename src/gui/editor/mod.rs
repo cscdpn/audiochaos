@@ -36,6 +36,19 @@ const REFRESH: Duration = Duration::from_millis(250);
 /// follow a beat.
 const LIVE_REFRESH: Duration = Duration::from_millis(33);
 
+/// How many shown passes to wait at most for block sizes to settle before
+/// arranging blocks anyway.
+const MAX_SETTLING_PASSES: u32 = 8;
+
+/// Block sizes as the last shown pass measured them, waiting for a pass
+/// that measures the same: a grid, as in `song`, only gets its final
+/// width the pass after it first shows.
+#[derive(Default)]
+struct Settling {
+    sizes: HashMap<BlockId, Vec2>,
+    passes: u32,
+}
+
 /// The node editor: one block per module, wires for cables.
 ///
 /// The controller is the source of truth. The snarl (egui-snarl's graph) is
@@ -55,7 +68,7 @@ pub struct Editor {
     /// Set for a patch without block positions, as a generated one: the
     /// default layout guesses block sizes, and some blocks are wider than
     /// guessed, so once drawn they are arranged by their real sizes.
-    arrange_once_drawn: bool,
+    arrange_once_drawn: Option<Settling>,
     /// Each clock's Tap button.
     taps: HashMap<NodeId, Tap>,
     /// Where each `notes` block's piano roll is looking.
@@ -86,7 +99,7 @@ impl Editor {
             snarl: Snarl::new(),
             sizes: HashMap::new(),
             show_origin: None,
-            arrange_once_drawn: false,
+            arrange_once_drawn: None,
             taps: HashMap::new(),
             note_views: HashMap::new(),
             to_global: TSTransform::IDENTITY,
@@ -104,7 +117,7 @@ impl Editor {
     /// from `positions` get the default layout.
     fn rebuild(&mut self, positions: &BTreeMap<String, [f32; 2]>) {
         let layout = default_layout(&self.controller);
-        self.arrange_once_drawn = positions.is_empty();
+        self.arrange_once_drawn = positions.is_empty().then(Settling::default);
         // Module ids are reused by the new patch's modules.
         self.note_views.clear();
         self.snarl = Snarl::new();
@@ -382,9 +395,17 @@ impl Editor {
             .show(&mut self.snarl, &mut viewer, ui);
         // A pass egui discards measures new blocks, and their sizes are
         // not final until a pass it shows.
-        if self.arrange_once_drawn && !ui.ctx().will_discard() {
-            self.arrange_once_drawn = false;
-            self.arrange();
+        if let Some(settling) = &mut self.arrange_once_drawn
+            && !ui.ctx().will_discard()
+        {
+            settling.passes += 1;
+            if settling.sizes == self.sizes || settling.passes >= MAX_SETTLING_PASSES {
+                self.arrange_once_drawn = None;
+                self.arrange();
+            } else {
+                settling.sizes.clone_from(&self.sizes);
+                ui.ctx().request_repaint();
+            }
         }
         self.snap_blocks(ui);
         self.disconnect_cables_without_wires();
