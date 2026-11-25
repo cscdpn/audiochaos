@@ -12,7 +12,7 @@ repository.workspace = true
 publish = false
 
 [workspace]
-members = ["plugin", "xtask"]
+members = ["generator", "plugin", "xtask"]
 
 # Shared by every crate of the workspace, so a release bumps one version.
 [workspace.package]

@@ -514,6 +514,31 @@ from the code), and `example.json` is a song in four sections. It fits in
 the context of a small local model, around 8,000 tokens in all, and needs
 nothing else from this repository.
 
+### Generated songs
+
+`audiochaos-gen` turns any text, any file, or what another command prints,
+into a song patch: always the same song for the same input, different songs
+for inputs that differ by a single byte.
+
+```sh
+just gen "hello world" > hello.json      # a text, taken as is
+just gen --file photo.jpg > photo.json   # the bytes of any file
+head -c 64 /dev/urandom | just gen > noise.json  # a new song each time
+just run hello.json
+just play "hello world"                  # both at once, keeping no file
+```
+
+The text is taken byte for byte, spaces and case included: `Hello` and
+`hello` give two different songs. Each song has the same skeleton: a clock,
+a `song` block with an intro, one to six sections and an outro, two to six
+instruments among kick, snare, hats, bass, lead and pad, each with up to
+two effects, a mix and the master. The tempo, the key, the sections, the
+notes, the rhythms and every knob are drawn from the input. It is not meant
+to be musical, only to play: something sounds from the first section, and
+every knob stays in its range. The description at the top of the patch
+names the generator's version and the seed the input gave; the same input
+gives the same song for as long as that version stays the same.
+
 ### Stereo
 
 The master has three inputs: what goes into `in` plays on both speakers, as
@@ -566,6 +591,8 @@ just run --buffer 128 looper             # smaller sound card buffers
 just run --low-latency looper            # the sound card without the mixer
 just run --midi-monitor                  # what the MIDI controllers send
 just tui          # terminal UI instead of the editor
+just gen "some text" > song.json         # a song generated from a text
+just play "some text"                    # the same, played at once
 just bundle         # VST3 and CLAP plugins into target/bundled/
 just install-plugin # the same, copied to ~/.vst3 and ~/.clap
 just test

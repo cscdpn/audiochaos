@@ -34,6 +34,7 @@ src/
   session.rs     sound cards + engine + recorder for the program (feature app)
   main.rs        command line
 plugin/          VST3 and CLAP instrument, on nice-plug
+generator/       `audiochaos-gen`: any input to a song patch, reproducibly
 xtask/           `cargo xtask bundle`, nice-plug's plugin bundler
 tests/           stability.rs (fuzzed patches), realtime.rs (no allocation),
                  skill.rs (the skill below stays true to the modules)
@@ -189,6 +190,28 @@ positions are saved with the patch but only the editor reads them.
   atomics the plugin writes before each frame and the clocks read at the
   start of each block, so a block starts exactly where the song is.
 
+## The song generator
+
+`audiochaos-gen` is a crate of its own, on the library without the editor:
+the synth does not need it, yet it reads the same `Patch` type and its
+tests load every song it makes with the real modules, so it cannot drift
+from them as a separate project would.
+
+Its promise is the same song for the same input, which rules out the
+obvious tools: `std`'s `DefaultHasher` may change algorithm with Rust, and
+the `rand` crate does not promise the same numbers from one version to the
+next. The input goes through FNV-1a into a seed, the seed through
+SplitMix64, both a few lines written out in `generator/src/rng.rs` and
+checked against their reference values. Knobs are drawn as whole
+thousandths and divided once, so no floating-point rounding differs between
+machines, and the patch's maps are `BTreeMap`s, written in a fixed order.
+
+The generator also keeps its own lists of instruments, effects, scales and
+knob ranges rather than drawing from the library's, so a module or scale
+added to audiochaos does not shift every draw after it. When the generator
+itself changes what inputs give, its `VERSION`, written in each song's
+description, goes up: the promise holds per version.
+
 ## Testing
 
 - The engine is a library that renders offline, so it is fully testable
@@ -198,6 +221,9 @@ positions are saved with the patch but only the editor reads them.
 - `tests/stability.rs` renders random patches with random knob settings and
   checks the output stays finite and bounded, and that no module gets stuck
   on non-finite state.
+- `generator/tests/generate.rs` loads hundreds of generated songs, plays
+  the start of some, and compares the song of `hello world` with a saved
+  copy, so a change that alters the songs inputs give cannot go unnoticed.
 - The editor's tests draw it headless with egui and click on what it draws.
 - `plugin/tests/clap_host.rs` drives the plugin through its CLAP entry point
   as a host would: notes in, sound out, state saved and restored, clocks

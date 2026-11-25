@@ -10,6 +10,11 @@ wrong.
 
 ### Added
 
+- `audiochaos-gen`, a song generator: give it a text, any file with
+  `--file`, or pipe a command into it, and it prints a song patch with
+  sections, drums, bass and melodies, always the same for the same input.
+  `just gen "hello world" > hello.json`, then `just run hello.json`, or both
+  at once with `just play "hello world"`.
 - `mute`, a kill switch for any two cables, such as a `pan`'s left and
   right; a mute switch on each input of `mix` and each track of `song`, in
   its grid.

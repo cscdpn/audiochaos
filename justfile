@@ -12,6 +12,23 @@ run *args:
 tui *args:
     cargo run -- --tui {{args}}
 
+# Positional arguments keep a text with spaces in one piece.
+# Prints the song a text gives: `just gen "hello" > hello.json`.
+[positional-arguments]
+gen *args:
+    @cargo run -q -p audiochaos-gen -- "$@"
+
+# The program reads the patch on startup, so the file can go when it quits.
+# Generates a song and plays it at once, keeping no file: `just play "hello"`.
+[positional-arguments]
+play *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    song="$(mktemp --suffix=.json)"
+    trap 'rm -f "$song"' EXIT
+    cargo run -q -p audiochaos-gen -- "$@" > "$song"
+    cargo run -- "$song"
+
 test:
     cargo test --workspace
 

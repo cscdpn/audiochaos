@@ -1,0 +1,13 @@
+[package]
+name = "audiochaos-gen"
+description = "Turns any input, text or bytes, into an audiochaos song patch, always the same for the same input"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# The library alone: the patch format and the modules' knobs, no sound card
+# nor window.
+audiochaos = { path = "..", default-features = false }

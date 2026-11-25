@@ -507,6 +507,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "audiochaos-gen"
+version = "0.1.0"
+dependencies = [
+ "audiochaos",
+]
+
+[[package]]
 name = "audiochaos-plugin"
 version = "0.1.0"
 dependencies = [
