@@ -41,8 +41,8 @@ the knobs and switches for those that are on or off.
 - Right-click a slider to reset it (see [below](#knobs-and-cv)).
 - The canvas pans and zooms with the mouse.
 - **Patch** menu: load a built-in preset, **Arrange blocks**, **Snap to
-  grid**, **Import…** a patch file, **Export…** the current patch, block
-  positions included, or **Quit** (Ctrl+Q).
+  grid**, **Theme**, **Import…** a patch file, **Export…** the current
+  patch, block positions included, or **Quit** (Ctrl+Q).
 - **Arrange blocks** follows the signal: each block goes in a column right
   of the blocks that feed it, the master last, and each column is ordered to
   bring blocks level with what they connect to, which uncrosses most wires.
@@ -50,6 +50,12 @@ the knobs and switches for those that are on or off.
   zooms out to show the whole patch, down to half size.
 - With **Snap to grid**, on by default, blocks land on the grid when let
   go.
+- **Theme**: Dark, Light, or Chaos, black-light violet with pink and acid
+  green. Orange and blue still mean audio and CV, and blocks keep their
+  size, so a patch looks laid out the same in every theme. The program
+  remembers the theme in `~/.config/audiochaos/settings.json`
+  (`%APPDATA%\audiochaos` on Windows); the plugin saves it with the
+  host's project.
 - Shift+click blocks, or Shift+drag around them, to select several; dragging
   one of them moves them all. **Ctrl+D**, or **Duplicate** in a block's menu,
   copies them just below with their knobs, sounds and the cables between

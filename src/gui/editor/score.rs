@@ -288,7 +288,8 @@ pub(super) fn patterns(patterns: &mut Patterns, view: &mut NoteView, ui: &mut Ui
         let background = match (on_root, in_key) {
             (true, _) => visuals.widgets.inactive.bg_fill,
             (false, true) => visuals.extreme_bg_color,
-            (false, false) => Color32::from_rgb(70, 20, 20),
+            // Reddened, on a dark theme as on a light one.
+            (false, false) => visuals.extreme_bg_color.lerp_to_gamma(Color32::RED, 0.25),
         };
         for column in 0..shown {
             let step = first + column;

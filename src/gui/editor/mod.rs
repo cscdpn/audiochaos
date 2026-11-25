@@ -23,6 +23,8 @@ use crate::modules::Context;
 use crate::modules::clock::Tap;
 use crate::patch::Patch;
 
+use super::Theme;
+
 use layout::{BLOCK_GAP, GRID, columns, default_layout, estimated_size, flow, snapped};
 use score::NoteView;
 use viewer::Viewer;
@@ -64,6 +66,8 @@ pub struct Editor {
     view: Rect,
     /// Whether blocks land on the grid.
     pub snap: bool,
+    /// How the whole window looks.
+    pub theme: Theme,
     /// Blocks to copy, asked for from a block's menu while drawing.
     to_duplicate: Option<Vec<BlockId>>,
     /// The last thing worth telling the user, for the status bar.
@@ -88,6 +92,7 @@ impl Editor {
             to_global: TSTransform::IDENTITY,
             view: Rect::ZERO,
             snap: true,
+            theme: Theme::default(),
             to_duplicate: None,
             status: String::new(),
         };
@@ -346,6 +351,7 @@ impl Editor {
     }
 
     pub fn show_graph(&mut self, ui: &mut Ui) {
+        self.theme.apply(ui.ctx());
         self.view = ui.max_rect();
         self.handle_shortcuts(ui);
         let mut viewer = Viewer {

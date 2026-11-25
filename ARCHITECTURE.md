@@ -26,8 +26,10 @@ src/
   gui/
     editor/        the node editor, shared by the program and the plugin
     toolbar.rs     Patch menu and Stop button, shared too
+    theme.rs       the Dark, Light and Chaos looks, shared too
     app.rs         the standalone window: Audio menu, Rec (feature app)
     keyboard.rs    the computer keyboard as a piano (feature app)
+    settings.rs    what the program remembers between runs (feature app)
   tui/           the terminal UI, a fallback for SSH (feature app)
   session.rs     sound cards + engine + recorder for the program (feature app)
   main.rs        command line

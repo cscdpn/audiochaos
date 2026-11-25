@@ -7,8 +7,12 @@ mod app;
 mod editor;
 #[cfg(feature = "app")]
 mod keyboard;
+#[cfg(feature = "app")]
+mod settings;
+mod theme;
 mod toolbar;
 
 #[cfg(feature = "app")]
 pub use app::run;
 pub use editor::Editor;
+pub use theme::Theme;

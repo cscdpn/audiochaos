@@ -1183,3 +1183,14 @@ fn a_song_track_is_muted_from_its_row() {
     let id = module(&editor, "song");
     assert_eq!(editor.controller.node(id).params[song::mute(1)], 1.0);
 }
+
+#[test]
+fn the_chosen_theme_restyles_the_window() {
+    let mut editor = editor("bass");
+    let ctx = egui::Context::default();
+    paint(&mut editor, &ctx, vec![]);
+    assert!(ctx.global_style().visuals.dark_mode);
+    editor.theme = Theme::Light;
+    paint(&mut editor, &ctx, vec![]);
+    assert!(!ctx.global_style().visuals.dark_mode);
+}

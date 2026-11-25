@@ -7,10 +7,11 @@ use std::path::Path;
 use crate::patch::Patch;
 use crate::presets;
 
-use super::Editor;
+use super::{Editor, Theme};
 
 impl Editor {
-    /// The Patch menu: presets, layout, files, and groups of blocks.
+    /// The Patch menu: presets, layout and looks, files, and groups of
+    /// blocks.
     pub fn patch_menu(&mut self, ui: &mut egui::Ui) {
         ui.menu_button("Presets", |ui| {
             for name in presets::names() {
@@ -25,6 +26,11 @@ impl Editor {
         }
         ui.checkbox(&mut self.snap, "Snap to grid")
             .on_hover_text("Blocks land on the grid when let go");
+        ui.menu_button("Theme", |ui| {
+            for theme in Theme::ALL {
+                ui.radio_value(&mut self.theme, theme, theme.name());
+            }
+        });
         ui.separator();
         if ui.button("Import…").clicked() {
             self.import();

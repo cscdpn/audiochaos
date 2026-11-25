@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use audiochaos::engine::control::{COMMAND_QUEUE_CAPACITY, Engine};
 use audiochaos::engine::input::LiveInput;
 use audiochaos::engine::transport::Transport;
-use audiochaos::gui::Editor;
+use audiochaos::gui::{Editor, Theme};
 use audiochaos::midi::{self, Parser};
 use audiochaos::modules::Context;
 use audiochaos::patch::Patch;
@@ -52,6 +52,9 @@ pub struct AudiochaosParams {
     /// The patch, saved with the host's project.
     #[persist = "patch"]
     patch: PatchField,
+    /// The editor's theme, saved with the project too.
+    #[persist = "theme"]
+    theme: ThemeField,
     /// The `midi` modules' knobs, for the host to automate: a MIDI
     /// controller's knobs 1 to 8, in the same 128 steps.
     #[nested(array, group = "Knob")]
@@ -97,6 +100,22 @@ impl<'a> PersistentField<'a, Patch> for PatchField {
     }
 }
 
+/// The editor's theme, as a persistent field.
+struct ThemeField(Arc<Mutex<Editor>>);
+
+impl<'a> PersistentField<'a, Theme> for ThemeField {
+    fn set(&self, theme: Theme) {
+        lock(&self.0).theme = theme;
+    }
+
+    fn map<F, R>(&self, f: F) -> R
+    where
+        F: Fn(&Theme) -> R,
+    {
+        f(&lock(&self.0).theme)
+    }
+}
+
 /// The editor even if a panic while drawing poisoned its lock: a
 /// half-drawn frame leaves nothing inconsistent behind.
 fn lock(editor: &Mutex<Editor>) -> MutexGuard<'_, Editor> {
@@ -124,6 +143,7 @@ impl Default for Audiochaos {
         )));
         let params = Arc::new(AudiochaosParams {
             patch: PatchField(Arc::clone(&editor)),
+            theme: ThemeField(Arc::clone(&editor)),
             knobs: std::array::from_fn(|knob| KnobParam::new(knob + 1)),
         });
         Self {

@@ -113,18 +113,23 @@ impl Instance {
 
     /// Loads `patch` as a host restores a project.
     fn load_patch(&self, patch: &Patch) {
-        // nice-plug's JSON, after its length on 8 bytes.
+        self.load_field("patch", serde_json::to_string(patch).unwrap());
+    }
+
+    /// The persistent fields nice-plug saves, as JSON after its length on
+    /// 8 bytes.
+    fn fields(&self) -> serde_json::Value {
         let saved = self.save();
-        let mut state: serde_json::Value = serde_json::from_slice(&saved[8..]).unwrap();
+        let state: serde_json::Value = serde_json::from_slice(&saved[8..]).unwrap();
+        state
+    }
+
+    /// Restores a project where the field `name` holds `json`.
+    fn load_field(&self, name: &str, json: String) {
+        let mut state = self.fields();
         let fields = state["fields"].as_object_mut().expect("persistent fields");
-        assert!(
-            fields.contains_key("patch"),
-            "the patch is saved: {fields:?}"
-        );
-        fields.insert(
-            "patch".to_string(),
-            serde_json::Value::String(serde_json::to_string(patch).unwrap()),
-        );
+        assert!(fields.contains_key(name), "{name} is saved: {fields:?}");
+        fields.insert(name.to_string(), serde_json::Value::String(json));
         let json = serde_json::to_vec(&state).unwrap();
         let mut edited = (json.len() as u64).to_le_bytes().to_vec();
         edited.extend(json);
@@ -337,6 +342,14 @@ fn the_state_restores_in_another_instance() {
     let restoring = Instance::new();
     restoring.load(&saved);
     assert_eq!(restoring.save(), saved);
+}
+
+#[test]
+fn the_theme_is_saved_with_the_project() {
+    let instance = Instance::new();
+    assert_eq!(instance.fields()["fields"]["theme"], r#""dark""#);
+    instance.load_field("theme", r#""chaos""#.to_string());
+    assert_eq!(instance.fields()["fields"]["theme"], r#""chaos""#);
 }
 
 #[test]

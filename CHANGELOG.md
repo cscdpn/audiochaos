@@ -15,6 +15,9 @@ wrong.
   its grid.
 - Snap to grid in the editor, on by default.
 - Quit in the Patch menu, or Ctrl+Q.
+- Themes in the Patch menu: Dark, Light, and Chaos, the project's own. The
+  program remembers the choice in a settings file, the plugin in the
+  host's project.
 
 ### Changed
 

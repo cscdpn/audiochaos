@@ -2,7 +2,7 @@
 //! and recording controls that a DAW provides to the plugin.
 
 use std::error::Error;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use eframe::egui;
@@ -15,6 +15,7 @@ use crate::session::{self, Devices, Session};
 
 use super::Editor;
 use super::keyboard::Keyboard;
+use super::settings::Settings;
 
 /// Runs until the window is closed. `session` plays `patch` on `devices`;
 /// only the patch's block positions are read. `status` is the first message
@@ -30,8 +31,16 @@ pub fn run(
     let keyboard = Keyboard::new(Arc::clone(&midi_state));
     let mut editor = Editor::new(session.controller, session.context, &patch.positions);
     editor.status = status;
+    let settings_path = Settings::path();
+    let settings = settings_path
+        .as_deref()
+        .map(Settings::load)
+        .unwrap_or_default();
+    editor.theme = settings.theme;
     let app = GuiApp {
         editor,
+        settings,
+        settings_path,
         keyboard,
         playback: Some(session.playback),
         recorder: session.recorder,
@@ -52,6 +61,10 @@ pub fn run(
 
 struct GuiApp {
     editor: Editor,
+    /// As last saved, to save again when they change.
+    settings: Settings,
+    /// None if the environment does not say where settings go.
+    settings_path: Option<PathBuf>,
     keyboard: Keyboard,
     /// Owned so the sound plays exactly as long as the window is open. None
     /// only while switching cards fails.
@@ -69,6 +82,7 @@ struct GuiApp {
 
 impl eframe::App for GuiApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.save_settings();
         ui.ctx().request_repaint_after(self.editor.refresh());
         let playing = !ui.ctx().egui_wants_keyboard_input();
         ui.ctx().input(|input| {
@@ -111,6 +125,23 @@ impl eframe::App for GuiApp {
 }
 
 impl GuiApp {
+    /// Saves the settings as soon as they change, so that a crash keeps
+    /// them too.
+    fn save_settings(&mut self) {
+        let settings = Settings {
+            theme: self.editor.theme,
+        };
+        if settings == self.settings {
+            return;
+        }
+        self.settings = settings;
+        if let Some(path) = &self.settings_path
+            && let Err(e) = settings.save(path)
+        {
+            self.editor.status = format!("cannot save the settings: {e}");
+        }
+    }
+
     fn audio_menu(&mut self, ui: &mut egui::Ui) {
         let (outputs, inputs) = self
             .device_lists
